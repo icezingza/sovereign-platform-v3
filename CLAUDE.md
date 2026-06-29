@@ -107,21 +107,38 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | Sprint | Scope |
 |---|---|
 | **2.4** ✅ | Frozen `MemoryRecord` aggregate + 51 unit tests |
-| **2.5** | `MemoryRepository` interface, `MemorySnapshot` mapper, Drizzle adapter, repository contract tests |
+| **2.5** ✅ | `MemoryRepository` interface, `MemorySnapshot` mapper, Drizzle/SQLite adapter, repository contract tests (71 tests total) |
 | **2.6** | Application layer: command handlers, use cases, transaction boundaries, event dispatch |
 | **2.7** | Event bus, outbox pattern, async consumers |
 
-### Sprint 2.5 entry points
+### Sprint 2.5 — Repository Layer (done)
+
+```
+src/
+├── domain/memory/
+│   └── memory-repository.interface.ts      # Port: save/findById/delete
+└── infrastructure/persistence/memory/
+    ├── schema/memory-records.schema.ts      # Drizzle SQLite schema
+    ├── mappers/memory.mapper.ts             # Snapshot ↔ DB row (ISO dates, JSON refs)
+    ├── drizzle.memory-repository.ts         # Production adapter
+    └── in-memory.memory-repository.ts      # Fast adapter for tests / dev
+```
+
+**Key schema note**: the `references` column is named `refs` in the DB (SQLite reserved word).
+
+**Contract tests** (`src/__tests__/infrastructure/persistence/memory/memory-repository.contract.spec.ts`) run the same 10 assertions against both `InMemoryMemoryRepository` and `DrizzleMemoryRepository`.
+
+### Sprint 2.6 — Application Layer (next)
+
+Command handlers receive IDs, load the aggregate via the repository, call domain methods, persist, then publish pulled events:
 
 ```ts
-// Repository port — accepts aggregate, not snapshot
-interface MemoryRepository {
-  save(memory: MemoryRecord): Promise<void>;
-  findById(id: MemoryId): Promise<MemoryRecord | null>;
-  delete(id: MemoryId): Promise<void>;
-}
-
-// Outbox sits BEFORE the event bus (same DB transaction as the write):
-// save(memory) → write snapshot + outbox rows atomically
-// outbox processor → publish to event bus → consumers
+// Pattern for every command handler
+const memory = await repo.findById(id);          // load
+memory.archive(clock);                           // domain method
+await repo.save(memory);                         // persist
+await eventBus.publish(memory.pullEvents());     // dispatch events AFTER save
 ```
+
+Outbox sits BEFORE the event bus (same DB transaction as the write):
+`save(memory)` → write snapshot + outbox rows atomically → outbox processor → event bus → consumers

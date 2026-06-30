@@ -5,6 +5,7 @@ import {
   UnitOfWorkContext,
 } from '../../application/ports/unit-of-work.interface';
 import { DrizzleOutboxRepository } from './outbox/drizzle.outbox-repository';
+import { DrizzleKnowledgeRepository } from './knowledge/drizzle.knowledge-repository';
 import { DrizzleMemoryRepository } from './memory/drizzle.memory-repository';
 
 type DrizzleDB = ReturnType<typeof drizzle>;
@@ -27,6 +28,7 @@ export class DrizzleUnitOfWork implements UnitOfWork {
   async execute<T>(work: (ctx: UnitOfWorkContext) => Promise<T>): Promise<T> {
     const ctx: UnitOfWorkContext = {
       repo: new DrizzleMemoryRepository(this.db),
+      knowledgeRepo: new DrizzleKnowledgeRepository(this.db),
       outbox: new DrizzleOutboxRepository(this.db),
     };
 

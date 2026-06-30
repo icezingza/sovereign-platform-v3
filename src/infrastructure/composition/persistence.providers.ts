@@ -10,6 +10,7 @@ import { OutboxProcessor } from '../../application/services/outbox-processor';
 import { OutboxPollingDriver } from '../../application/services/outbox-polling-driver';
 import { DispatchingEventBus } from '../events/dispatching.event-bus';
 import { DrizzleUnitOfWork } from '../persistence/drizzle.unit-of-work';
+import { DrizzleKnowledgeRepository } from '../persistence/knowledge/drizzle.knowledge-repository';
 import { DrizzleMemoryRepository } from '../persistence/memory/drizzle.memory-repository';
 import { DrizzleOutboxRepository } from '../persistence/outbox/drizzle.outbox-repository';
 import { ensureSchema } from '../persistence/schema';
@@ -17,6 +18,7 @@ import {
   CLOCK,
   DRIZZLE_DB,
   EVENT_BUS,
+  KNOWLEDGE_REPOSITORY,
   MEMORY_REPOSITORY,
   OUTBOX_POLLING_DRIVER,
   OUTBOX_PROCESSOR,
@@ -63,6 +65,11 @@ export const persistenceProviders: Provider[] = [
   {
     provide: MEMORY_REPOSITORY,
     useFactory: (db: DrizzleDB) => new DrizzleMemoryRepository(db),
+    inject: [DRIZZLE_DB],
+  },
+  {
+    provide: KNOWLEDGE_REPOSITORY,
+    useFactory: (db: DrizzleDB) => new DrizzleKnowledgeRepository(db),
     inject: [DRIZZLE_DB],
   },
   {

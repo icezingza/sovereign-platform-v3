@@ -5,10 +5,11 @@ import { handlerProviders } from './infrastructure/composition/handlers.provider
 import { OutboxLifecycleService } from './infrastructure/composition/outbox-lifecycle.service';
 import { persistenceProviders } from './infrastructure/composition/persistence.providers';
 import { DomainErrorFilter } from './infrastructure/http/domain-error.filter';
+import { KnowledgeController } from './infrastructure/http/knowledge.controller';
 import { MemoryController } from './infrastructure/http/memory.controller';
 
 @Module({
-  controllers: [MemoryController],
+  controllers: [MemoryController, KnowledgeController],
   providers: [
     ...persistenceProviders,
     ...handlerProviders,

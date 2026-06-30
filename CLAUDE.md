@@ -115,6 +115,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.8** ✅ | `OutboxPollingDriver` — interval-based scheduler for `OutboxProcessor.processPending()` (112 tests total) |
 | **2.9** ✅ | Query side: `GetMemoryByIdHandler` (115 tests total) |
 | **2.10** ✅ | Composition root: NestJS app wiring all 7 handlers behind REST endpoints, real SQLite backing, outbox polling driver running for real (118 tests total) |
+| **2.11** ✅ | `Knowledge` aggregate (domain + persistence + application + HTTP), `UnitOfWork` extended to carry `knowledgeRepo`, `LinkKnowledgeHandler` now validates the linked knowledge actually exists (169 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -275,3 +276,36 @@ Sprints 2.4–2.9 built every layer (aggregate, repositories, command handlers, 
 **Error mapping**: `DomainErrorFilter` is the only new translation logic — it maps `MemoryNotFoundError` to 404 and any other `DomainError`/`ApplicationError` (e.g. `InvalidStateTransitionError` from an invalid state machine transition) to 409. Plain `Error`s thrown by value-object factories (`Importance.create`, `MemoryId.create`) are deliberately left unmapped and fall through to Nest's default 500 handler — they're pre-existing domain-layer behavior (Sprint 2.4 is frozen) and mapping them would mean guessing at semantics the domain layer doesn't currently express.
 
 **Tests**: `composition-root.e2e.spec.ts` boots the real `AppModule` via `@nestjs/testing` + `supertest` against an in-memory SQLite connection (`DB_PATH=':memory:'`, set in `jest.setup.js` so it's resolved before the providers module is imported) and drives the actual HTTP layer — create → get → archive (asserts version increments and status changes through real persistence), a 404 case, and a 409 case (archiving a deleted memory). This is in addition to manual verification: built with `npm run build`, ran `node dist/main.js` against a real on-disk SQLite file, and curled the full lifecycle (create/get/archive/restore/link-knowledge/forget/invalid-transition/not-found) — confirmed the outbox polling driver actually drains and marks events processed against the real file, not just in the mocked test path.
+
+### Sprint 2.11 — Knowledge Aggregate (done)
+
+```
+src/
+├── domain/knowledge/
+│   ├── knowledge.ts                                  # Aggregate Root — ACTIVE ↔ ARCHIVED only
+│   ├── knowledge-snapshot.ts                         # DTO boundary for persistence
+│   ├── knowledge-status.ts                           # Enum: ACTIVE | ARCHIVED
+│   ├── knowledge-repository.interface.ts             # Port: save/findById/delete
+│   └── events/                                        # KnowledgeCreated/Archived/Restored, all extend DomainEvent
+├── infrastructure/persistence/knowledge/
+│   ├── schema/knowledge-entries.schema.ts            # Drizzle SQLite schema
+│   ├── mappers/knowledge.mapper.ts                   # Snapshot ↔ DB row
+│   ├── drizzle.knowledge-repository.ts               # Production adapter
+│   └── in-memory.knowledge-repository.ts             # Fast adapter for tests / dev
+└── application/knowledge/
+    ├── errors/application-error.ts                    # KnowledgeNotFoundError
+    ├── commands/{create,archive,restore}-knowledge.handler.ts
+    └── queries/get-knowledge-by-id.handler.ts
+```
+
+Sprint 2.6's `linkKnowledge()` accepted any string ID with nothing to validate against — `MemoryRecord.references` was a list of IDs pointing at an aggregate that didn't exist yet. This sprint adds that aggregate: `Knowledge` is `MemoryRecord`'s structural sibling (same private-constructor + `static create()`/`static reconstitute()` + behavior-methods-only shape) but with a deliberately smaller 2-state machine (`ACTIVE ↔ ARCHIVED`, no `FORGOTTEN`/`DELETED`) since nothing in the codebase calls for richer Knowledge lifecycle semantics yet.
+
+**Shared-kernel reuse**: `Knowledge` imports `DomainEvent`, `TimeProvider`/`FakeClock`, `DomainError`/`InvalidStateTransitionError`/`InvalidOperationError`, and `KnowledgeId` directly from their existing locations under `domain/memory/` rather than duplicating them — those pieces were already aggregate-agnostic. `EventSerializer.toOutboxEvents()` (Sprint 2.7) and the `OutboxRepository`/`OutboxEvent` envelope are likewise reused unmodified — `OutboxEvent.aggregateId` was always a plain `string`, so Knowledge events flow through the exact same outbox pipeline as Memory events with zero infrastructure changes.
+
+**`UnitOfWorkContext` extended**: `{ repo, outbox }` became `{ repo, knowledgeRepo, outbox }`. `DrizzleUnitOfWork.execute()` already constructed its repositories fresh per call from the shared `db`, so adding `DrizzleKnowledgeRepository` there was one line and shares the same `BEGIN`/`COMMIT`/`ROLLBACK` wrapper for free. `InMemoryUnitOfWork` took `repo`/`outbox` via constructor, so it gained a third `knowledgeRepo` constructor parameter — its two existing call sites in `command-handlers.spec.ts` were updated accordingly.
+
+**`LinkKnowledgeHandler` tightened**: it now calls `knowledgeRepo.findById(knowledgeId)` inside the same `UnitOfWork.execute()` transaction and throws `KnowledgeNotFoundError` before calling `memory.linkKnowledge(...)` if the knowledge doesn't exist — closing the gap that motivated this sprint. `DomainErrorFilter` maps `KnowledgeNotFoundError` to 404 alongside `MemoryNotFoundError`.
+
+**HTTP**: `KnowledgeController` at `/knowledge` (`POST /`, `GET /:id`, `POST /:id/archive`, `POST /:id/restore`) is a 1:1 pass-through to the four new handlers, mirroring `MemoryController`'s shape exactly. No `DELETE` endpoint — `Knowledge` has no terminal/deleted state.
+
+**Tests**: `knowledge.spec.ts` (domain, 19 tests) mirrors `memory-record.spec.ts`'s structure scaled to the 2-state machine. `knowledge-repository.contract.spec.ts` mirrors the Sprint 2.5 `describe.each` contract-test pattern over `InMemoryKnowledgeRepository` + `DrizzleKnowledgeRepository`. `application/knowledge/command-handlers.spec.ts` and `get-knowledge-by-id.handler.spec.ts` cover the four application handlers. `command-handlers.spec.ts` (Memory) gained a `seedActiveKnowledge` helper and a new test asserting `LinkKnowledgeHandler` throws `KnowledgeNotFoundError` (with no outbox append) when the referenced knowledge doesn't exist. `composition-root.e2e.spec.ts` gained a full Knowledge HTTP lifecycle test (create → get → archive → restore, asserting version increments through real persistence), a 404 case, a positive link-knowledge happy path now that validation exists, and a 404 case for linking a non-existent knowledge id. Manual verification: built with `npm run build`, ran `node dist/main.js` against a real on-disk SQLite file, curled the full Knowledge lifecycle plus a real Memory↔Knowledge link, and confirmed via direct SQLite inspection that all five `KnowledgeCreated`/`KnowledgeArchived`/`KnowledgeRestored`/`MemoryCreated`/`KnowledgeLinked` outbox events were drained and marked processed by the real polling driver.

@@ -5,14 +5,19 @@ import { ForgetMemoryHandler } from '../../../application/memory/commands/forget
 import { LinkKnowledgeHandler } from '../../../application/memory/commands/link-knowledge.handler';
 import { RestoreMemoryHandler } from '../../../application/memory/commands/restore-memory.handler';
 import { MemoryNotFoundError } from '../../../application/memory/errors/application-error';
+import { KnowledgeNotFoundError } from '../../../application/knowledge/errors/application-error';
+import { Knowledge } from '../../../domain/knowledge/knowledge';
+import { KnowledgeRepository } from '../../../domain/knowledge/knowledge-repository.interface';
 import { MemoryRecord } from '../../../domain/memory/memory-record';
 import { MemoryRepository } from '../../../domain/memory/memory-repository.interface';
 import { MemoryStatus } from '../../../domain/memory/memory-status';
 import { FakeClock } from '../../../domain/memory/time/fake-clock';
 import { Importance } from '../../../domain/memory/value-objects/importance';
+import { KnowledgeId } from '../../../domain/memory/value-objects/knowledge-id';
 import { MemoryId } from '../../../domain/memory/value-objects/memory-id';
 import { InMemoryOutboxRepository } from '../../../infrastructure/persistence/outbox/in-memory.outbox-repository';
 import { InMemoryUnitOfWork } from '../../../infrastructure/persistence/in-memory.unit-of-work';
+import { InMemoryKnowledgeRepository } from '../../../infrastructure/persistence/knowledge/in-memory.knowledge-repository';
 import { InMemoryMemoryRepository } from '../../../infrastructure/persistence/memory/in-memory.memory-repository';
 
 const BASE_DATE = new Date('2024-01-15T10:00:00.000Z');
@@ -49,16 +54,30 @@ async function seedActiveMemory(
   return memoryId;
 }
 
+async function seedActiveKnowledge(
+  repo: KnowledgeRepository,
+  clock: FakeClock,
+  id = 'k1',
+): Promise<KnowledgeId> {
+  const knowledgeId = KnowledgeId.create(id);
+  const knowledge = Knowledge.create(knowledgeId, 'knowledge content', clock);
+  knowledge.pullEvents();
+  await repo.save(knowledge);
+  return knowledgeId;
+}
+
 describe('Application Layer — Command Handlers', () => {
   let repo: InMemoryMemoryRepository;
   let outbox: InMemoryOutboxRepository;
+  let knowledgeRepo: InMemoryKnowledgeRepository;
   let unitOfWork: InMemoryUnitOfWork;
   let clock: FakeClock;
 
   beforeEach(() => {
     repo = new InMemoryMemoryRepository();
     outbox = new InMemoryOutboxRepository();
-    unitOfWork = new InMemoryUnitOfWork(repo, outbox);
+    knowledgeRepo = new InMemoryKnowledgeRepository();
+    unitOfWork = new InMemoryUnitOfWork(repo, outbox, knowledgeRepo);
     clock = new FakeClock(BASE_DATE);
   });
 
@@ -173,6 +192,7 @@ describe('Application Layer — Command Handlers', () => {
   describe('LinkKnowledgeHandler', () => {
     it('links knowledge to a memory and appends KnowledgeLinked to the outbox', async () => {
       const id = await seedActiveMemory(repo, clock);
+      await seedActiveKnowledge(knowledgeRepo, clock);
       const handler = new LinkKnowledgeHandler(unitOfWork, clock);
 
       await handler.execute({ id: id.value, knowledgeId: 'k1' });
@@ -187,6 +207,7 @@ describe('Application Layer — Command Handlers', () => {
 
     it('does not append a duplicate outbox event when linking the same knowledge twice', async () => {
       const id = await seedActiveMemory(repo, clock);
+      await seedActiveKnowledge(knowledgeRepo, clock);
       const handler = new LinkKnowledgeHandler(unitOfWork, clock);
 
       await handler.execute({ id: id.value, knowledgeId: 'k1' });
@@ -198,11 +219,25 @@ describe('Application Layer — Command Handlers', () => {
     });
 
     it('throws MemoryNotFoundError for a non-existent id', async () => {
+      await seedActiveKnowledge(knowledgeRepo, clock);
       const handler = new LinkKnowledgeHandler(unitOfWork, clock);
 
       await expect(handler.execute({ id: 'nope', knowledgeId: 'k1' })).rejects.toThrow(
         MemoryNotFoundError,
       );
+    });
+
+    it('throws KnowledgeNotFoundError when the referenced knowledge does not exist', async () => {
+      const id = await seedActiveMemory(repo, clock);
+      const handler = new LinkKnowledgeHandler(unitOfWork, clock);
+
+      await expect(
+        handler.execute({ id: id.value, knowledgeId: 'missing-k' }),
+      ).rejects.toThrow(KnowledgeNotFoundError);
+
+      const found = await repo.findById(id);
+      expect(found!.references).toHaveLength(0);
+      expect(await outbox.findUnprocessed()).toHaveLength(0);
     });
   });
 
@@ -210,7 +245,11 @@ describe('Application Layer — Command Handlers', () => {
     it('does not append outbox events when save() fails', async () => {
       const failingRepo = new FailingRepository();
       const failingOutbox = new InMemoryOutboxRepository();
-      const failingUnitOfWork = new InMemoryUnitOfWork(failingRepo, failingOutbox);
+      const failingUnitOfWork = new InMemoryUnitOfWork(
+        failingRepo,
+        failingOutbox,
+        new InMemoryKnowledgeRepository(),
+      );
 
       const id = MemoryId.create('m-fail');
       const seeded = MemoryRecord.create(id, 'content', Importance.create(5), clock);

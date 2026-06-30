@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { Provider } from '@nestjs/common';
+import { Logger, Provider } from '@nestjs/common';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
@@ -28,7 +28,13 @@ import {
 type DrizzleDB = ReturnType<typeof drizzle>;
 
 const DB_PATH = process.env.DB_PATH ?? './data/sovereign.sqlite';
-const OUTBOX_POLL_INTERVAL_MS = Number(process.env.OUTBOX_POLL_INTERVAL_MS ?? 5000);
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw);
+  return raw && Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const OUTBOX_POLL_INTERVAL_MS = parsePositiveInt(process.env.OUTBOX_POLL_INTERVAL_MS, 5000);
 
 function openConnection(): Database.Database {
   if (DB_PATH !== ':memory:') {
@@ -80,11 +86,12 @@ export const persistenceProviders: Provider[] = [
   },
   {
     provide: OUTBOX_POLLING_DRIVER,
-    useFactory: (processor: OutboxProcessor) =>
-      new OutboxPollingDriver(processor, OUTBOX_POLL_INTERVAL_MS, (error) => {
-        // eslint-disable-next-line no-console
-        console.error('OutboxPollingDriver tick failed:', error);
-      }),
+    useFactory: (processor: OutboxProcessor) => {
+      const logger = new Logger('OutboxPollingDriver');
+      return new OutboxPollingDriver(processor, OUTBOX_POLL_INTERVAL_MS, (error) => {
+        logger.error('OutboxPollingDriver tick failed', error);
+      });
+    },
     inject: [OUTBOX_PROCESSOR],
   },
 ];

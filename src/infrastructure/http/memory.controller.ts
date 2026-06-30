@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -41,6 +42,11 @@ export class MemoryController {
   @Post()
   @HttpCode(201)
   async create(@Body() body: CreateMemoryBody): Promise<{ id: string }> {
+    if (!body || typeof body.content !== 'string' || typeof body.importance !== 'number') {
+      throw new BadRequestException(
+        '"content" must be a string and "importance" must be a number',
+      );
+    }
     const id = await this.createMemoryHandler.execute(body);
     return { id: id.value };
   }
@@ -73,6 +79,9 @@ export class MemoryController {
   @Post(':id/link-knowledge')
   @HttpCode(204)
   async linkKnowledge(@Param('id') id: string, @Body() body: LinkKnowledgeBody): Promise<void> {
+    if (!body || typeof body.knowledgeId !== 'string') {
+      throw new BadRequestException('"knowledgeId" must be a string');
+    }
     await this.linkKnowledgeHandler.execute({ id, knowledgeId: body.knowledgeId });
   }
 

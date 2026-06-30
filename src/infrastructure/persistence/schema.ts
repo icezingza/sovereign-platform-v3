@@ -32,4 +32,10 @@ export function ensureSchema(sqlite: Database.Database): void {
       processed_at   TEXT
     )
   `);
+
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_outbox_events_unprocessed
+    ON outbox_events (occurred_at)
+    WHERE processed_at IS NULL
+  `);
 }

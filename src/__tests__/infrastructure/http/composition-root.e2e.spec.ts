@@ -61,4 +61,26 @@ describe('Composition root (HTTP)', () => {
 
     await request(app.getHttpServer()).post(`/memories/${id}/archive`).expect(409);
   });
+
+  it('returns 400 when creating a memory with a malformed body', async () => {
+    await request(app.getHttpServer())
+      .post('/memories')
+      .send({ content: 'missing importance' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/memories')
+      .send({ content: 'wrong type', importance: 'high' })
+      .expect(400);
+  });
+
+  it('returns 400 when linking knowledge with a malformed body', async () => {
+    const createResponse = await request(app.getHttpServer())
+      .post('/memories')
+      .send({ content: 'link target', importance: 4 })
+      .expect(201);
+    const { id } = createResponse.body;
+
+    await request(app.getHttpServer()).post(`/memories/${id}/link-knowledge`).send({}).expect(400);
+  });
 });

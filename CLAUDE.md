@@ -14,6 +14,8 @@ npm run test:watch                # watch mode
 npm run test:single -- <pattern>  # run one file, e.g. memory-record
 npm run test:coverage             # coverage report
 npm run typecheck                 # type-check without emitting
+npm run build                     # tsc -> dist/
+npm start                         # node dist/main.js (runs the HTTP API; build first)
 ```
 
 ## Architecture
@@ -112,6 +114,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.7** ✅ | Outbox pattern, `UnitOfWork` port, `OutboxProcessor`, `DispatchingEventBus` async consumers (105 tests total) |
 | **2.8** ✅ | `OutboxPollingDriver` — interval-based scheduler for `OutboxProcessor.processPending()` (112 tests total) |
 | **2.9** ✅ | Query side: `GetMemoryByIdHandler` (115 tests total) |
+| **2.10** ✅ | Composition root: NestJS app wiring all 7 handlers behind REST endpoints, real SQLite backing, outbox polling driver running for real (118 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -240,3 +243,35 @@ Sprints 2.6–2.8 built out a complete write side (6 command handlers) but no qu
 No `ListMemories`/`findAll` query was added — `MemoryRepository` only exposes `findById`, and adding a list capability would require a new repository method plus both adapter implementations, which is out of scope until a concrete use case needs it.
 
 Real `EventConsumer` implementations remain deliberately out of scope (see note above).
+
+### Sprint 2.10 — Composition Root / Runnable API (done)
+
+```
+src/
+├── main.ts                                       # NestJS bootstrap; enableShutdownHooks()
+├── app.module.ts                                  # Single root module: wires everything below
+└── infrastructure/
+    ├── composition/
+    │   ├── tokens.ts                              # DI symbols for interfaces (no runtime value to use as a token)
+    │   ├── persistence.providers.ts                # SQLITE_CONNECTION -> DRIZZLE_DB -> UnitOfWork/MemoryRepository/OutboxRepository/EventBus/OutboxProcessor/OutboxPollingDriver
+    │   ├── handlers.providers.ts                   # The 7 existing handlers, constructed via useFactory against the above tokens
+    │   └── outbox-lifecycle.service.ts              # OnApplicationBootstrap starts the polling driver; OnApplicationShutdown stops it + closes the sqlite connection
+    └── http/
+        ├── memory.controller.ts                    # REST endpoints, one per handler, no new business logic
+        └── domain-error.filter.ts                   # ApplicationError/DomainError -> HTTP status (MemoryNotFoundError -> 404, else 409)
+└── infrastructure/persistence/schema.ts             # ensureSchema(sqlite): CREATE TABLE IF NOT EXISTS for both tables
+```
+
+Sprints 2.4–2.9 built every layer (aggregate, repositories, command handlers, outbox, polling driver, query handler) but none of it had ever been wired together outside of test code — there was no `main.ts`, no HTTP entry point, and no migration/bootstrap step that created real tables against a real file. This sprint adds exactly one new thing: a composition root that constructs the existing pieces and exposes them over REST. **No new domain or application logic was added** — `MemoryController` methods are 1:1 pass-throughs to the existing handler `execute()` methods.
+
+**Framework choice**: NestJS, per CLAUDE.md's own Layer Boundaries wording ("Domain knows nothing about ORM, HTTP, NestJS, or any framework") — the doc already named the intended outer-layer framework. Per that same boundary, NestJS touches only `src/main.ts`, `src/app.module.ts`, and `src/infrastructure/{composition,http}/` — no `@Injectable()`/`@Controller()` decorators or NestJS imports appear anywhere in `src/domain/` or `src/application/`.
+
+**Why custom DI tokens instead of `@Injectable()` on the handlers**: the 6 command handlers and `GetMemoryByIdHandler` live in the application layer and must stay framework-free, so they're never decorated. Instead, `handlers.providers.ts` registers each handler class itself as its own NestJS provider token (`{ provide: CreateMemoryHandler, useFactory: (uow, clock) => new CreateMemoryHandler(uow, clock), inject: [...] }`) — Nest matches this against the controller's constructor parameter types without requiring the handler class to carry any Nest metadata. Lower-level interfaces (`UnitOfWork`, `MemoryRepository`, `TimeProvider`, etc.) have no runtime value to use as a token, so `tokens.ts` defines `Symbol()` tokens for those instead.
+
+**No migration tooling exists yet** (Sprint 2.5/2.7 only ever created tables ad hoc inside test `setup()` functions) — `infrastructure/persistence/schema.ts` mirrors that exact DDL in one `ensureSchema()` call invoked once when the composition root opens its SQLite connection, rather than introducing a new migration system for a single call site.
+
+**Config**: two environment variables, both optional — `DB_PATH` (default `./data/sovereign.sqlite`; `:memory:` is accepted for ephemeral/test runs) and `OUTBOX_POLL_INTERVAL_MS` (default `5000`). No `@nestjs/config` dependency was added since two `process.env` reads don't justify it.
+
+**Error mapping**: `DomainErrorFilter` is the only new translation logic — it maps `MemoryNotFoundError` to 404 and any other `DomainError`/`ApplicationError` (e.g. `InvalidStateTransitionError` from an invalid state machine transition) to 409. Plain `Error`s thrown by value-object factories (`Importance.create`, `MemoryId.create`) are deliberately left unmapped and fall through to Nest's default 500 handler — they're pre-existing domain-layer behavior (Sprint 2.4 is frozen) and mapping them would mean guessing at semantics the domain layer doesn't currently express.
+
+**Tests**: `composition-root.e2e.spec.ts` boots the real `AppModule` via `@nestjs/testing` + `supertest` against an in-memory SQLite connection (`DB_PATH=':memory:'`, set in `jest.setup.js` so it's resolved before the providers module is imported) and drives the actual HTTP layer — create → get → archive (asserts version increments and status changes through real persistence), a 404 case, and a 409 case (archiving a deleted memory). This is in addition to manual verification: built with `npm run build`, ran `node dist/main.js` against a real on-disk SQLite file, and curled the full lifecycle (create/get/archive/restore/link-knowledge/forget/invalid-transition/not-found) — confirmed the outbox polling driver actually drains and marks events processed against the real file, not just in the mocked test path.

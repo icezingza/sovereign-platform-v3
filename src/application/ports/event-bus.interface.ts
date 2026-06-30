@@ -1,5 +1,5 @@
-import { DomainEvent } from '../../domain/memory/events/domain-event';
+import { OutboxEvent } from './outbox-event';
 
 export interface EventBus {
-  publish(events: DomainEvent[]): Promise<void>;
+  publish(events: OutboxEvent[]): Promise<void>;
 }

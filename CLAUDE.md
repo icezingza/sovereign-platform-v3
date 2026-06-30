@@ -109,7 +109,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.4** ✅ | Frozen `MemoryRecord` aggregate + 51 unit tests |
 | **2.5** ✅ | `MemoryRepository` interface, `MemorySnapshot` mapper, Drizzle/SQLite adapter, repository contract tests (71 tests total) |
 | **2.6** ✅ | Application layer: command handlers, `EventBus` port, `InMemoryEventBus` adapter (84 tests total) |
-| **2.7** | Event bus, outbox pattern, async consumers |
+| **2.7** ✅ | Outbox pattern, `UnitOfWork` port, `OutboxProcessor`, `DispatchingEventBus` async consumers (105 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -148,20 +148,63 @@ src/
     └── in-memory.event-bus.ts                # Fast adapter for tests / dev
 ```
 
-Command handlers receive IDs, load the aggregate via the repository, call domain methods, persist, then publish pulled events:
-
-```ts
-// Pattern for every command handler
-const memory = await repo.findById(id);          // load
-if (!memory) throw new MemoryNotFoundError(id);
-memory.archive(clock);                           // domain method
-await repo.save(memory);                         // persist
-await eventBus.publish(memory.pullEvents());     // dispatch events AFTER save
-```
+Command handlers receive IDs, load the aggregate via the repository, call domain methods, persist, then publish pulled events. **Superseded in Sprint 2.7** — see below: the direct `repo` + `eventBus` constructor params and the `eventBus.publish()` call were replaced by a `UnitOfWork` that atomically saves the aggregate and appends to the outbox.
 
 Each of the five mutating handlers (archive/restore/forget/delete/linkKnowledge) is deliberately written out rather than factored into a shared base class — explicit duplication over premature abstraction for five short, simple flows. `CreateMemoryHandler` is the only handler that doesn't load first; it generates a new `MemoryId` and calls `MemoryRecord.create()`.
 
-**Tests** (`src/__tests__/application/memory/command-handlers.spec.ts`, 13 tests): happy path + `MemoryNotFoundError` for each handler, idempotency check for `LinkKnowledgeHandler` (no duplicate event on repeat link), and a transaction-boundary test asserting `eventBus.publish()` is never called when `repo.save()` throws.
+### Sprint 2.7 — Outbox Pattern (done)
 
-Outbox sits BEFORE the event bus (same DB transaction as the write) — not yet implemented:
-`save(memory)` → write snapshot + outbox rows atomically → outbox processor → event bus → consumers
+```
+src/
+├── application/
+│   ├── ports/
+│   │   ├── event-bus.interface.ts            # Port: publish(events: OutboxEvent[])
+│   │   ├── event-consumer.interface.ts       # Port: { eventType, handle(event) }
+│   │   ├── outbox-event.ts                   # OutboxEvent DTO (generic envelope)
+│   │   ├── outbox-repository.interface.ts    # Port: append/findUnprocessed/markProcessed
+│   │   └── unit-of-work.interface.ts         # Port: execute(work) -> { repo, outbox }
+│   ├── memory/
+│   │   ├── mappers/event-serializer.ts       # DomainEvent -> OutboxEvent
+│   │   └── commands/*.handler.ts             # rewritten to take (unitOfWork, clock)
+│   └── services/
+│       └── outbox-processor.ts               # findUnprocessed -> publish -> markProcessed
+└── infrastructure/
+    ├── events/
+    │   ├── in-memory.event-bus.ts            # rewritten for OutboxEvent[]
+    │   └── dispatching.event-bus.ts          # routes OutboxEvent -> registered EventConsumers by eventType
+    └── persistence/
+        ├── in-memory.unit-of-work.ts         # no-op wrapper (no real atomicity needed for Map-backed adapters)
+        ├── drizzle.unit-of-work.ts           # manual BEGIN/COMMIT/ROLLBACK around an async callback
+        └── outbox/
+            ├── schema/outbox-events.schema.ts
+            ├── mappers/outbox.mapper.ts
+            ├── drizzle.outbox-repository.ts
+            └── in-memory.outbox-repository.ts
+```
+
+Once an event crosses the outbox boundary it's serialized into the generic `OutboxEvent` envelope (`eventId`, `aggregateId`, `eventType: string`, `occurredAt`, `schemaVersion`, `payload: Record<string, unknown>`) — consumers downstream key off `eventType` strings, not `instanceof` checks against concrete `DomainEvent` subclasses.
+
+Every mutating command handler now runs inside a single `UnitOfWork.execute()` call so the snapshot write and the outbox append are atomic:
+
+```ts
+// Pattern for every command handler
+await this.unitOfWork.execute(async ({ repo, outbox }) => {
+  const memory = await repo.findById(id);
+  if (!memory) throw new MemoryNotFoundError(id);
+  memory.archive(this.clock);
+  await repo.save(memory);
+  await outbox.append(EventSerializer.toOutboxEvents(memory.pullEvents()));
+});
+```
+
+**`DrizzleUnitOfWork` note**: better-sqlite3's native `db.transaction()` only accepts a *synchronous* callback, which doesn't fit handlers that `await findById()` before deciding what to write next (the await yields to the microtask queue, so the sync wrapper would COMMIT before the callback's later statements ran). Since better-sqlite3 is a single, synchronous connection anyway, `DrizzleUnitOfWork` issues `BEGIN`/`COMMIT`/`ROLLBACK` manually via `db.$client` around an awaited async callback instead — same atomicity guarantee, compatible with async/await. `InMemoryUnitOfWork` needs no such ceremony; it just invokes the callback directly against the shared in-memory adapters.
+
+`OutboxProcessor.processPending(limit = 50)` reads unprocessed rows, publishes them to the `EventBus`, then marks them processed — this is the only thing that calls `eventBus.publish()` now; command handlers never call it directly. `DispatchingEventBus` is the production-shaped `EventBus`: `register(consumer)` to subscribe an `EventConsumer` to a given `eventType`, then `publish()` fans each event out to its registered consumers.
+
+**Tests**:
+- `command-handlers.spec.ts` (13 tests) — rewritten to assert against the outbox (`outbox.findUnprocessed()`) instead of an injected `EventBus`; the transaction-boundary test now asserts `outbox.append()` is never called when `repo.save()` throws.
+- `outbox-repository.contract.spec.ts` — `describe.each` over `InMemoryOutboxRepository` + `DrizzleOutboxRepository`, mirroring the Sprint 2.5 repository contract test style: append/findUnprocessed/markProcessed round-trip, ordering by `occurredAt`, limit, idempotent `markProcessed`, empty-array no-op.
+- `drizzle.unit-of-work.spec.ts` — verifies the manual transaction wrapper actually commits both tables together on success and rolls back both on a thrown error, plus that reads via `repo.findById()` see prior writes within the same unit of work.
+- `outbox-processor.spec.ts` — `processPending()` behavior (publish + mark processed, no-op when empty, no reprocessing, `limit`), and `DispatchingEventBus` routing events to the correct `EventConsumer` by `eventType`.
+
+Not yet implemented: a scheduled/polling driver that calls `OutboxProcessor.processPending()` on an interval (currently it's invoked manually/by tests only), and real `EventConsumer` implementations (only `RecordingConsumer` exists, in tests).

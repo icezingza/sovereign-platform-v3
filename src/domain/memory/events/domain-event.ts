@@ -6,6 +6,7 @@ export interface DomainEventProps {
 }
 
 export abstract class DomainEvent {
+  abstract readonly eventType: string;
   readonly eventId: string;
   readonly aggregateId: string;
   readonly aggregateVersion: number;

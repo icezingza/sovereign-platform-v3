@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
 import { Knowledge } from '../../../domain/knowledge/knowledge';
@@ -50,13 +50,16 @@ export class DrizzleKnowledgeRepository implements KnowledgeRepository {
   }
 
   async findAll(options: ListKnowledgeOptions = {}): Promise<Knowledge[]> {
-    const { status } = options;
+    const { status, search } = options;
     const limit = options.limit ?? 50;
     const offset = options.offset ?? 0;
+    const conditions = [];
+    if (status) conditions.push(eq(knowledgeEntriesTable.status, status));
+    if (search) conditions.push(like(knowledgeEntriesTable.content, `%${search}%`));
     const rows = this.db
       .select()
       .from(knowledgeEntriesTable)
-      .where(status ? eq(knowledgeEntriesTable.status, status) : undefined)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(knowledgeEntriesTable.createdAt))
       .limit(limit)
       .offset(offset)

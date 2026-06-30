@@ -24,11 +24,13 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   }
 
   async findAll(options: ListKnowledgeOptions = {}): Promise<Knowledge[]> {
-    const { status } = options;
+    const { status, search } = options;
     const limit = options.limit ?? 50;
     const offset = options.offset ?? 0;
+    const needle = search?.toLowerCase();
     const snapshots = [...this.store.values()]
       .filter((snapshot) => !status || snapshot.status === status)
+      .filter((snapshot) => !needle || snapshot.content.toLowerCase().includes(needle))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return snapshots.slice(offset, offset + limit).map((snapshot) => Knowledge.reconstitute(snapshot));
   }

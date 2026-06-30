@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 
 export interface ListQueryParams<TStatus extends string> {
   status?: TStatus;
+  search?: string;
   limit?: number;
   offset?: number;
 }
@@ -17,6 +18,16 @@ export function parseListQuery<TStatus extends string>(
       throw new BadRequestException(`"status" must be one of: ${validStatuses.join(', ')}`);
     }
     result.status = query.status as TStatus;
+  }
+
+  if (query.search !== undefined) {
+    if (typeof query.search !== 'string' || query.search.trim().length === 0) {
+      throw new BadRequestException('"search" must be a non-empty string');
+    }
+    if (query.search.length > 200) {
+      throw new BadRequestException('"search" must be at most 200 characters');
+    }
+    result.search = query.search;
   }
 
   if (query.limit !== undefined) {

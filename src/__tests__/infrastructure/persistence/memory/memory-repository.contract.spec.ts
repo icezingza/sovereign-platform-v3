@@ -236,5 +236,52 @@ describe.each(factories)('%s — Repository Contract', (_, factory) => {
 
       expect(page.map((m) => m.id.value)).toEqual(ids.slice(1, 3));
     });
+
+    it('filters by content search (case-insensitive substring)', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const apple = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'I like apples',
+        Importance.create(5),
+        clock,
+      );
+      await repo.save(apple);
+      const banana = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'I like bananas',
+        Importance.create(5),
+        clock,
+      );
+      await repo.save(banana);
+
+      const found = await repo.findAll({ search: 'APPLE' });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(apple.id.value);
+    });
+
+    it('combines status filter and content search', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const activeApple = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'apple pie',
+        Importance.create(5),
+        clock,
+      );
+      await repo.save(activeApple);
+      const archivedApple = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'apple tart',
+        Importance.create(5),
+        clock,
+      );
+      archivedApple.archive(clock);
+      await repo.save(archivedApple);
+
+      const found = await repo.findAll({ status: MemoryStatus.ARCHIVED, search: 'apple' });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(archivedApple.id.value);
+    });
   });
 });

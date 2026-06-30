@@ -4,6 +4,7 @@ import { MemoryId } from './value-objects/memory-id';
 
 export interface ListMemoriesOptions {
   status?: MemoryStatus;
+  search?: string;
   limit?: number;
   offset?: number;
 }

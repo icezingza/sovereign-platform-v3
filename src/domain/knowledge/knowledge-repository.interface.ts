@@ -4,6 +4,7 @@ import { KnowledgeId } from '../memory/value-objects/knowledge-id';
 
 export interface ListKnowledgeOptions {
   status?: KnowledgeStatus;
+  search?: string;
   limit?: number;
   offset?: number;
 }

@@ -1,8 +1,8 @@
-import { EventBus } from '../../ports/event-bus.interface';
-import { MemoryRepository } from '../../../domain/memory/memory-repository.interface';
+import { UnitOfWork } from '../../ports/unit-of-work.interface';
 import { TimeProvider } from '../../../domain/memory/time/time-provider.interface';
 import { MemoryId } from '../../../domain/memory/value-objects/memory-id';
 import { MemoryNotFoundError } from '../errors/application-error';
+import { EventSerializer } from '../mappers/event-serializer';
 
 export interface ForgetMemoryCommand {
   id: string;
@@ -10,19 +10,20 @@ export interface ForgetMemoryCommand {
 
 export class ForgetMemoryHandler {
   constructor(
-    private readonly repo: MemoryRepository,
-    private readonly eventBus: EventBus,
+    private readonly unitOfWork: UnitOfWork,
     private readonly clock: TimeProvider,
   ) {}
 
   async execute(command: ForgetMemoryCommand): Promise<void> {
-    const id = MemoryId.create(command.id);
-    const memory = await this.repo.findById(id);
-    if (!memory) throw new MemoryNotFoundError(command.id);
+    await this.unitOfWork.execute(async ({ repo, outbox }) => {
+      const id = MemoryId.create(command.id);
+      const memory = await repo.findById(id);
+      if (!memory) throw new MemoryNotFoundError(command.id);
 
-    memory.forget(this.clock);
+      memory.forget(this.clock);
 
-    await this.repo.save(memory);
-    await this.eventBus.publish(memory.pullEvents());
+      await repo.save(memory);
+      await outbox.append(EventSerializer.toOutboxEvents(memory.pullEvents()));
+    });
   }
 }

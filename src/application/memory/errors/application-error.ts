@@ -3,6 +3,9 @@ export class ApplicationError extends Error {
     super(message);
     this.name = 'ApplicationError';
     Object.setPrototypeOf(this, new.target.prototype);
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
   }
 }
 

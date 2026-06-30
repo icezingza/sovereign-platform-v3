@@ -22,6 +22,17 @@ export function ensureSchema(sqlite: Database.Database): void {
   `);
 
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS knowledge_entries (
+      id         TEXT    PRIMARY KEY,
+      content    TEXT    NOT NULL,
+      status     TEXT    NOT NULL,
+      version    INTEGER NOT NULL,
+      created_at TEXT    NOT NULL,
+      updated_at TEXT    NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
     CREATE TABLE IF NOT EXISTS outbox_events (
       event_id       TEXT    PRIMARY KEY,
       aggregate_id   TEXT    NOT NULL,

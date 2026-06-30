@@ -2,6 +2,7 @@ export const SQLITE_CONNECTION = Symbol('SQLITE_CONNECTION');
 export const DRIZZLE_DB = Symbol('DRIZZLE_DB');
 export const CLOCK = Symbol('CLOCK');
 export const MEMORY_REPOSITORY = Symbol('MEMORY_REPOSITORY');
+export const KNOWLEDGE_REPOSITORY = Symbol('KNOWLEDGE_REPOSITORY');
 export const UNIT_OF_WORK = Symbol('UNIT_OF_WORK');
 export const OUTBOX_REPOSITORY = Symbol('OUTBOX_REPOSITORY');
 export const EVENT_BUS = Symbol('EVENT_BUS');

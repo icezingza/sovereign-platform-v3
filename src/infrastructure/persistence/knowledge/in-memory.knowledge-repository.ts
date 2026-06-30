@@ -24,7 +24,9 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   }
 
   async findAll(options: ListKnowledgeOptions = {}): Promise<Knowledge[]> {
-    const { status, limit = 50, offset = 0 } = options;
+    const { status } = options;
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
     const snapshots = [...this.store.values()]
       .filter((snapshot) => !status || snapshot.status === status)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());

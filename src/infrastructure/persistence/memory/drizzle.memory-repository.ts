@@ -49,7 +49,9 @@ export class DrizzleMemoryRepository implements MemoryRepository {
   }
 
   async findAll(options: ListMemoriesOptions = {}): Promise<MemoryRecord[]> {
-    const { status, limit = 50, offset = 0 } = options;
+    const { status } = options;
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
     const rows = this.db
       .select()
       .from(memoryRecordsTable)

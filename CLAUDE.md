@@ -108,7 +108,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 |---|---|
 | **2.4** ✅ | Frozen `MemoryRecord` aggregate + 51 unit tests |
 | **2.5** ✅ | `MemoryRepository` interface, `MemorySnapshot` mapper, Drizzle/SQLite adapter, repository contract tests (71 tests total) |
-| **2.6** | Application layer: command handlers, use cases, transaction boundaries, event dispatch |
+| **2.6** ✅ | Application layer: command handlers, `EventBus` port, `InMemoryEventBus` adapter (84 tests total) |
 | **2.7** | Event bus, outbox pattern, async consumers |
 
 ### Sprint 2.5 — Repository Layer (done)
@@ -128,17 +128,40 @@ src/
 
 **Contract tests** (`src/__tests__/infrastructure/persistence/memory/memory-repository.contract.spec.ts`) run the same 10 assertions against both `InMemoryMemoryRepository` and `DrizzleMemoryRepository`.
 
-### Sprint 2.6 — Application Layer (next)
+### Sprint 2.6 — Application Layer (done)
+
+```
+src/
+├── application/
+│   ├── ports/
+│   │   └── event-bus.interface.ts            # Port: publish(events)
+│   └── memory/
+│       ├── errors/application-error.ts        # ApplicationError, MemoryNotFoundError
+│       └── commands/
+│           ├── create-memory.handler.ts
+│           ├── archive-memory.handler.ts
+│           ├── restore-memory.handler.ts
+│           ├── forget-memory.handler.ts
+│           ├── delete-memory.handler.ts
+│           └── link-knowledge.handler.ts
+└── infrastructure/events/
+    └── in-memory.event-bus.ts                # Fast adapter for tests / dev
+```
 
 Command handlers receive IDs, load the aggregate via the repository, call domain methods, persist, then publish pulled events:
 
 ```ts
 // Pattern for every command handler
 const memory = await repo.findById(id);          // load
+if (!memory) throw new MemoryNotFoundError(id);
 memory.archive(clock);                           // domain method
 await repo.save(memory);                         // persist
 await eventBus.publish(memory.pullEvents());     // dispatch events AFTER save
 ```
 
-Outbox sits BEFORE the event bus (same DB transaction as the write):
+Each of the five mutating handlers (archive/restore/forget/delete/linkKnowledge) is deliberately written out rather than factored into a shared base class — explicit duplication over premature abstraction for five short, simple flows. `CreateMemoryHandler` is the only handler that doesn't load first; it generates a new `MemoryId` and calls `MemoryRecord.create()`.
+
+**Tests** (`src/__tests__/application/memory/command-handlers.spec.ts`, 13 tests): happy path + `MemoryNotFoundError` for each handler, idempotency check for `LinkKnowledgeHandler` (no duplicate event on repeat link), and a transaction-boundary test asserting `eventBus.publish()` is never called when `repo.save()` throws.
+
+Outbox sits BEFORE the event bus (same DB transaction as the write) — not yet implemented:
 `save(memory)` → write snapshot + outbox rows atomically → outbox processor → event bus → consumers

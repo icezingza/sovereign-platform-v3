@@ -6,7 +6,7 @@ export class EventSerializer {
     return {
       eventId: event.eventId,
       aggregateId: event.aggregateId,
-      eventType: (event as unknown as { eventType: string }).eventType,
+      eventType: event.eventType,
       occurredAt: event.occurredAt,
       schemaVersion: event.schemaVersion,
       payload: { ...event } as Record<string, unknown>,

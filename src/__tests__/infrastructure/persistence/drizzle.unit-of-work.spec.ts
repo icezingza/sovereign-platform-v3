@@ -122,4 +122,41 @@ describe('DrizzleUnitOfWork', () => {
 
     sqlite.close();
   });
+
+  it('serializes concurrent execute() calls instead of interleaving BEGIN/COMMIT', async () => {
+    const { sqlite, unitOfWork } = setup();
+    const clock = new FakeClock(BASE_DATE);
+    const ids = [MemoryId.create(randomUUID()), MemoryId.create(randomUUID())];
+
+    await Promise.all(
+      ids.map((id, index) =>
+        unitOfWork.execute(async ({ repo, outbox }) => {
+          const memory = MemoryRecord.create(id, `content-${index}`, Importance.create(5), clock);
+          await repo.save(memory);
+          await new Promise((resolve) => setImmediate(resolve));
+          await outbox.append([
+            {
+              eventId: randomUUID(),
+              aggregateId: id.value,
+              eventType: 'MemoryCreated',
+              occurredAt: BASE_DATE,
+              schemaVersion: 1,
+              payload: {},
+            },
+          ]);
+        }),
+      ),
+    );
+
+    for (const id of ids) {
+      const memoryRow = sqlite.prepare('SELECT * FROM memory_records WHERE id = ?').get(id.value);
+      const outboxRow = sqlite
+        .prepare('SELECT * FROM outbox_events WHERE aggregate_id = ?')
+        .get(id.value);
+      expect(memoryRow).toBeDefined();
+      expect(outboxRow).toBeDefined();
+    }
+
+    sqlite.close();
+  });
 });

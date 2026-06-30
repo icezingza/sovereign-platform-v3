@@ -15,9 +15,13 @@ type DrizzleDB = ReturnType<typeof drizzle>;
  * contract (handlers need to `await findById()` before deciding what to
  * write next). better-sqlite3 is a single, synchronous connection, so
  * issuing BEGIN/COMMIT/ROLLBACK manually around an awaited async callback
- * gives the same atomicity guarantee without that constraint.
+ * gives the same atomicity guarantee without that constraint — but since
+ * it's one connection, concurrent `execute()` calls must be serialized
+ * via a promise queue or their BEGIN/COMMIT pairs would interleave.
  */
 export class DrizzleUnitOfWork implements UnitOfWork {
+  private queue: Promise<unknown> = Promise.resolve();
+
   constructor(private readonly db: DrizzleDB) {}
 
   async execute<T>(work: (ctx: UnitOfWorkContext) => Promise<T>): Promise<T> {
@@ -26,14 +30,24 @@ export class DrizzleUnitOfWork implements UnitOfWork {
       outbox: new DrizzleOutboxRepository(this.db),
     };
 
-    this.db.$client.exec('BEGIN');
-    try {
-      const result = await work(ctx);
-      this.db.$client.exec('COMMIT');
-      return result;
-    } catch (error) {
-      this.db.$client.exec('ROLLBACK');
-      throw error;
-    }
+    const run = async (): Promise<T> => {
+      this.db.$client.exec('BEGIN');
+      try {
+        const result = await work(ctx);
+        this.db.$client.exec('COMMIT');
+        return result;
+      } catch (error) {
+        try {
+          this.db.$client.exec('ROLLBACK');
+        } catch {
+          // Original error from work(ctx) takes priority over a rollback failure.
+        }
+        throw error;
+      }
+    };
+
+    const result = this.queue.then(run);
+    this.queue = result.catch(() => undefined);
+    return result;
   }
 }

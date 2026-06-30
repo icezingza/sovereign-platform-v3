@@ -1,5 +1,7 @@
 node_modules/
 dist/
 coverage/
+data/
 *.js.map
 *.d.ts.map
+*.sqlite

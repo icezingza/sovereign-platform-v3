@@ -111,6 +111,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.6** ✅ | Application layer: command handlers, `EventBus` port, `InMemoryEventBus` adapter (84 tests total) |
 | **2.7** ✅ | Outbox pattern, `UnitOfWork` port, `OutboxProcessor`, `DispatchingEventBus` async consumers (105 tests total) |
 | **2.8** ✅ | `OutboxPollingDriver` — interval-based scheduler for `OutboxProcessor.processPending()` (112 tests total) |
+| **2.9** ✅ | Query side: `GetMemoryByIdHandler` (115 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -223,5 +224,19 @@ src/
 `OutboxPollingDriver` wraps an `OutboxProcessor` with `start()`/`stop()` and runs `processPending()` on a recursive `setTimeout` loop — the next tick is only scheduled after the current call settles (success or failure), so a single driver instance never has two overlapping `processPending()` calls in flight. This is a single-process mitigation of the "race condition in concurrent outbox processing" concern raised in the Sprint 2.7 PR review; true multi-process/distributed locking (e.g. `SELECT ... FOR UPDATE SKIP LOCKED`, not supported by SQLite) remains out of scope since nothing in this project runs multiple worker processes yet.
 
 Errors thrown by `processPending()` are caught per-tick and routed to an optional `onError` callback (default no-op) so a transient failure doesn't kill the polling loop. `start()` is idempotent (calling it while already running is a no-op); `stop()` clears the pending timer.
+
+### Sprint 2.9 — Query Side (done)
+
+```
+src/
+├── application/memory/queries/
+│   └── get-memory-by-id.handler.ts             # GetMemoryByIdHandler: MemoryRepository -> MemorySnapshot | null
+└── __tests__/application/memory/queries/
+    └── get-memory-by-id.handler.spec.ts
+```
+
+Sprints 2.6–2.8 built out a complete write side (6 command handlers) but no query/read counterpart — the only existing reads (`repository.findById`) were internal to command handlers loading an aggregate before mutating it. `GetMemoryByIdHandler` closes that gap with a single, minimal query mirroring the existing command pattern (a `{ id: string }` query DTO, an `execute()` method), but deliberately does **not** go through `UnitOfWork` — a single read needs no transaction or outbox append, so it takes a `MemoryRepository` directly. It returns `MemorySnapshot | null` rather than the `MemoryRecord` aggregate, consistent with the project's snapshot-as-DTO-boundary convention (`toSnapshot()` returns a frozen DTO; handing out the live aggregate to a read consumer would leak mutation capability across the application boundary).
+
+No `ListMemories`/`findAll` query was added — `MemoryRepository` only exposes `findById`, and adding a list capability would require a new repository method plus both adapter implementations, which is out of scope until a concrete use case needs it.
 
 Real `EventConsumer` implementations remain deliberately out of scope (see note above).

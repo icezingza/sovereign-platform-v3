@@ -81,4 +81,26 @@ describe('OutboxPollingDriver', () => {
 
     expect(processPending).toHaveBeenCalledTimes(1);
   });
+
+  it('does not create duplicate timers when restarted while a tick is in flight', async () => {
+    let resolvePending!: (value: number) => void;
+    const pendingPromise = new Promise<number>((resolve) => {
+      resolvePending = resolve;
+    });
+    const processPending = jest.fn().mockReturnValue(pendingPromise);
+    const driver = new OutboxPollingDriver(makeProcessor(processPending), 1000);
+
+    driver.start();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(processPending).toHaveBeenCalledTimes(1);
+
+    driver.stop();
+    driver.start();
+
+    resolvePending(0);
+    await Promise.resolve();
+
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(processPending).toHaveBeenCalledTimes(2);
+  });
 });

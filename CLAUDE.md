@@ -116,6 +116,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.9** ✅ | Query side: `GetMemoryByIdHandler` (115 tests total) |
 | **2.10** ✅ | Composition root: NestJS app wiring all 7 handlers behind REST endpoints, real SQLite backing, outbox polling driver running for real (118 tests total) |
 | **2.11** ✅ | `Knowledge` aggregate (domain + persistence + application + HTTP), `UnitOfWork` extended to carry `knowledgeRepo`, `LinkKnowledgeHandler` now validates the linked knowledge actually exists (169 tests total) |
+| **2.12** ✅ | List/search queries: `findAll()` on both repositories, `ListMemoriesHandler`/`ListKnowledgeHandler`, `GET /memories` and `GET /knowledge` with status filter + limit/offset pagination (197 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -309,3 +310,30 @@ Sprint 2.6's `linkKnowledge()` accepted any string ID with nothing to validate a
 **HTTP**: `KnowledgeController` at `/knowledge` (`POST /`, `GET /:id`, `POST /:id/archive`, `POST /:id/restore`) is a 1:1 pass-through to the four new handlers, mirroring `MemoryController`'s shape exactly. No `DELETE` endpoint — `Knowledge` has no terminal/deleted state.
 
 **Tests**: `knowledge.spec.ts` (domain, 19 tests) mirrors `memory-record.spec.ts`'s structure scaled to the 2-state machine. `knowledge-repository.contract.spec.ts` mirrors the Sprint 2.5 `describe.each` contract-test pattern over `InMemoryKnowledgeRepository` + `DrizzleKnowledgeRepository`. `application/knowledge/command-handlers.spec.ts` and `get-knowledge-by-id.handler.spec.ts` cover the four application handlers. `command-handlers.spec.ts` (Memory) gained a `seedActiveKnowledge` helper and a new test asserting `LinkKnowledgeHandler` throws `KnowledgeNotFoundError` (with no outbox append) when the referenced knowledge doesn't exist. `composition-root.e2e.spec.ts` gained a full Knowledge HTTP lifecycle test (create → get → archive → restore, asserting version increments through real persistence), a 404 case, a positive link-knowledge happy path now that validation exists, and a 404 case for linking a non-existent knowledge id. Manual verification: built with `npm run build`, ran `node dist/main.js` against a real on-disk SQLite file, curled the full Knowledge lifecycle plus a real Memory↔Knowledge link, and confirmed via direct SQLite inspection that all five `KnowledgeCreated`/`KnowledgeArchived`/`KnowledgeRestored`/`MemoryCreated`/`KnowledgeLinked` outbox events were drained and marked processed by the real polling driver.
+
+### Sprint 2.12 — List/Search Queries (done)
+
+```
+src/
+├── domain/{memory,knowledge}/
+│   └── {memory,knowledge}-repository.interface.ts    # gained findAll(options?), ListMemoriesOptions/ListKnowledgeOptions
+├── infrastructure/persistence/{memory,knowledge}/
+│   ├── drizzle.{memory,knowledge}-repository.ts       # findAll(): optional status eq(), orderBy(desc(createdAt)), limit/offset
+│   └── in-memory.{memory,knowledge}-repository.ts     # findAll(): filter + sort + slice over the in-memory Map
+├── application/{memory,knowledge}/queries/
+│   └── list-{memories,knowledge}.handler.ts           # ListMemoriesHandler / ListKnowledgeHandler
+└── infrastructure/http/
+    ├── list-query.util.ts                              # parseListQuery(): shared status/limit/offset validation
+    ├── memory.controller.ts                             # gained GET /memories
+    └── knowledge.controller.ts                          # gained GET /knowledge
+```
+
+Sprints 2.9 and 2.11 both explicitly deferred a list/`findAll()` capability as out of scope — by this sprint that gap was the single biggest hole in the API surface: memories and knowledge could be created and fetched by id, but never enumerated. `ListMemoriesOptions`/`ListKnowledgeOptions` (`{ status?, limit?, offset? }`) were added to the existing repository interfaces rather than introducing a separate read-model/query-repository port, since both adapters already had everything needed (the full `Map`/table) to implement pagination directly.
+
+**Ordering and defaults**: `findAll()` always orders by `createdAt` descending (most-recent-first) and defaults to `limit: 50, offset: 0` when omitted, applied identically in both the Drizzle adapter (`.orderBy(desc(...)).limit(...).offset(...)`) and the in-memory adapter (`.sort(...).slice(...)`). The Drizzle adapter's `.where(status ? eq(...) : undefined)` relies on confirmed `drizzle-orm` behavior — passing `undefined` to `.where()` is valid and returns the unfiltered query — avoiding a branched query-builder chain.
+
+**Query handlers stay outside `UnitOfWork`**, consistent with `GetMemoryByIdHandler` (Sprint 2.9): a list read needs no transaction or outbox append, so `ListMemoriesHandler`/`ListKnowledgeHandler` take the repository directly and map results through `toSnapshot()`.
+
+**HTTP validation**: `parseListQuery()` is a small shared utility (status must be one of the enum's values, `limit` an integer in `[1, 100]`, `offset` a non-negative integer) used identically by both `MemoryController.list()` and `KnowledgeController.list()` — justified as a real, byte-for-byte duplication between two concrete call sites rather than a speculative abstraction. Invalid query params throw `BadRequestException` (400) before reaching the handler.
+
+**Tests**: `memory-repository.contract.spec.ts` and `knowledge-repository.contract.spec.ts` each gained a `findAll()` describe block (empty result, descending order via `FakeClock.tick()`, status filter, limit/offset pagination) run against both adapters. `list-memories.handler.spec.ts` and `list-knowledge.handler.spec.ts` (new files) cover the application handlers directly against `InMemoryMemoryRepository`/`InMemoryKnowledgeRepository`. `composition-root.e2e.spec.ts` gained list/filter/paginate/400-validation cases for both `GET /memories` and `GET /knowledge` against the real wired app. 197 tests total.

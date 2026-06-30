@@ -37,6 +37,10 @@ class FailingRepository implements MemoryRepository {
     return this.delegate.delete(id);
   }
 
+  findAll(options?: Parameters<MemoryRepository['findAll']>[0]) {
+    return this.delegate.findAll(options);
+  }
+
   async seed(memory: MemoryRecord): Promise<void> {
     await this.delegate.save(memory);
   }

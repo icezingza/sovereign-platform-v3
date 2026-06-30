@@ -8,6 +8,7 @@ import { ArchiveKnowledgeHandler } from '../../application/knowledge/commands/ar
 import { CreateKnowledgeHandler } from '../../application/knowledge/commands/create-knowledge.handler';
 import { RestoreKnowledgeHandler } from '../../application/knowledge/commands/restore-knowledge.handler';
 import { GetKnowledgeByIdHandler } from '../../application/knowledge/queries/get-knowledge-by-id.handler';
+import { ListKnowledgeHandler } from '../../application/knowledge/queries/list-knowledge.handler';
 import { ArchiveMemoryHandler } from '../../application/memory/commands/archive-memory.handler';
 import { CreateMemoryHandler } from '../../application/memory/commands/create-memory.handler';
 import { DeleteMemoryHandler } from '../../application/memory/commands/delete-memory.handler';
@@ -15,6 +16,7 @@ import { ForgetMemoryHandler } from '../../application/memory/commands/forget-me
 import { LinkKnowledgeHandler } from '../../application/memory/commands/link-knowledge.handler';
 import { RestoreMemoryHandler } from '../../application/memory/commands/restore-memory.handler';
 import { GetMemoryByIdHandler } from '../../application/memory/queries/get-memory-by-id.handler';
+import { ListMemoriesHandler } from '../../application/memory/queries/list-memories.handler';
 import { CLOCK, KNOWLEDGE_REPOSITORY, MEMORY_REPOSITORY, UNIT_OF_WORK } from './tokens';
 
 export const handlerProviders: Provider[] = [
@@ -54,6 +56,11 @@ export const handlerProviders: Provider[] = [
     inject: [MEMORY_REPOSITORY],
   },
   {
+    provide: ListMemoriesHandler,
+    useFactory: (repo: MemoryRepository) => new ListMemoriesHandler(repo),
+    inject: [MEMORY_REPOSITORY],
+  },
+  {
     provide: CreateKnowledgeHandler,
     useFactory: (uow: UnitOfWork, clock: TimeProvider) => new CreateKnowledgeHandler(uow, clock),
     inject: [UNIT_OF_WORK, CLOCK],
@@ -71,6 +78,11 @@ export const handlerProviders: Provider[] = [
   {
     provide: GetKnowledgeByIdHandler,
     useFactory: (repo: KnowledgeRepository) => new GetKnowledgeByIdHandler(repo),
+    inject: [KNOWLEDGE_REPOSITORY],
+  },
+  {
+    provide: ListKnowledgeHandler,
+    useFactory: (repo: KnowledgeRepository) => new ListKnowledgeHandler(repo),
     inject: [KNOWLEDGE_REPOSITORY],
   },
 ];

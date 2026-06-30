@@ -1,8 +1,11 @@
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
 import { Knowledge } from '../../../domain/knowledge/knowledge';
-import { KnowledgeRepository } from '../../../domain/knowledge/knowledge-repository.interface';
+import {
+  KnowledgeRepository,
+  ListKnowledgeOptions,
+} from '../../../domain/knowledge/knowledge-repository.interface';
 import { KnowledgeId } from '../../../domain/memory/value-objects/knowledge-id';
 import { KnowledgeMapper } from './mappers/knowledge.mapper';
 import { knowledgeEntriesTable } from './schema/knowledge-entries.schema';
@@ -44,5 +47,18 @@ export class DrizzleKnowledgeRepository implements KnowledgeRepository {
       .delete(knowledgeEntriesTable)
       .where(eq(knowledgeEntriesTable.id, id.value))
       .run();
+  }
+
+  async findAll(options: ListKnowledgeOptions = {}): Promise<Knowledge[]> {
+    const { status, limit = 50, offset = 0 } = options;
+    const rows = this.db
+      .select()
+      .from(knowledgeEntriesTable)
+      .where(status ? eq(knowledgeEntriesTable.status, status) : undefined)
+      .orderBy(desc(knowledgeEntriesTable.createdAt))
+      .limit(limit)
+      .offset(offset)
+      .all();
+    return rows.map((row) => Knowledge.reconstitute(KnowledgeMapper.toSnapshot(row)));
   }
 }

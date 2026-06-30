@@ -8,6 +8,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import { ArchiveMemoryHandler } from '../../application/memory/commands/archive-memory.handler';
@@ -17,6 +18,9 @@ import { ForgetMemoryHandler } from '../../application/memory/commands/forget-me
 import { LinkKnowledgeHandler } from '../../application/memory/commands/link-knowledge.handler';
 import { RestoreMemoryHandler } from '../../application/memory/commands/restore-memory.handler';
 import { GetMemoryByIdHandler } from '../../application/memory/queries/get-memory-by-id.handler';
+import { ListMemoriesHandler } from '../../application/memory/queries/list-memories.handler';
+import { MemoryStatus } from '../../domain/memory/memory-status';
+import { parseListQuery } from './list-query.util';
 
 interface CreateMemoryBody {
   content: string;
@@ -32,6 +36,7 @@ export class MemoryController {
   constructor(
     private readonly createMemoryHandler: CreateMemoryHandler,
     private readonly getMemoryByIdHandler: GetMemoryByIdHandler,
+    private readonly listMemoriesHandler: ListMemoriesHandler,
     private readonly archiveMemoryHandler: ArchiveMemoryHandler,
     private readonly restoreMemoryHandler: RestoreMemoryHandler,
     private readonly forgetMemoryHandler: ForgetMemoryHandler,
@@ -49,6 +54,12 @@ export class MemoryController {
     }
     const id = await this.createMemoryHandler.execute(body);
     return { id: id.value };
+  }
+
+  @Get()
+  async list(@Query() query: Record<string, unknown>) {
+    const params = parseListQuery(query, Object.values(MemoryStatus));
+    return this.listMemoriesHandler.execute(params);
   }
 
   @Get(':id')

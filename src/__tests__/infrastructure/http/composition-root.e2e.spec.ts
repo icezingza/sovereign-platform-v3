@@ -153,4 +153,78 @@ describe('Composition root (HTTP)', () => {
       .send({ knowledgeId: 'does-not-exist' })
       .expect(404);
   });
+
+  it('lists memories and filters them by status', async () => {
+    const createResponse = await request(app.getHttpServer())
+      .post('/memories')
+      .send({ content: 'listable memory', importance: 6 })
+      .expect(201);
+    const { id } = createResponse.body;
+
+    const listResponse = await request(app.getHttpServer()).get('/memories').expect(200);
+    expect(Array.isArray(listResponse.body)).toBe(true);
+    expect(listResponse.body.map((m: { id: string }) => m.id)).toContain(id);
+
+    await request(app.getHttpServer()).post(`/memories/${id}/archive`).expect(204);
+
+    const archivedResponse = await request(app.getHttpServer())
+      .get('/memories')
+      .query({ status: 'ARCHIVED' })
+      .expect(200);
+    expect(archivedResponse.body.map((m: { id: string }) => m.id)).toContain(id);
+    for (const memory of archivedResponse.body) {
+      expect(memory.status).toBe('ARCHIVED');
+    }
+  });
+
+  it('paginates memories with limit and offset', async () => {
+    const listResponse = await request(app.getHttpServer())
+      .get('/memories')
+      .query({ limit: 1, offset: 0 })
+      .expect(200);
+    expect(listResponse.body).toHaveLength(1);
+  });
+
+  it('returns 400 when listing memories with invalid query params', async () => {
+    await request(app.getHttpServer()).get('/memories').query({ status: 'BOGUS' }).expect(400);
+    await request(app.getHttpServer()).get('/memories').query({ limit: 0 }).expect(400);
+    await request(app.getHttpServer()).get('/memories').query({ offset: -1 }).expect(400);
+  });
+
+  it('lists knowledge entries and filters them by status', async () => {
+    const createResponse = await request(app.getHttpServer())
+      .post('/knowledge')
+      .send({ content: 'listable knowledge' })
+      .expect(201);
+    const { id } = createResponse.body;
+
+    const listResponse = await request(app.getHttpServer()).get('/knowledge').expect(200);
+    expect(Array.isArray(listResponse.body)).toBe(true);
+    expect(listResponse.body.map((k: { id: string }) => k.id)).toContain(id);
+
+    await request(app.getHttpServer()).post(`/knowledge/${id}/archive`).expect(204);
+
+    const archivedResponse = await request(app.getHttpServer())
+      .get('/knowledge')
+      .query({ status: 'ARCHIVED' })
+      .expect(200);
+    expect(archivedResponse.body.map((k: { id: string }) => k.id)).toContain(id);
+    for (const knowledge of archivedResponse.body) {
+      expect(knowledge.status).toBe('ARCHIVED');
+    }
+  });
+
+  it('paginates knowledge entries with limit and offset', async () => {
+    const listResponse = await request(app.getHttpServer())
+      .get('/knowledge')
+      .query({ limit: 1, offset: 0 })
+      .expect(200);
+    expect(listResponse.body).toHaveLength(1);
+  });
+
+  it('returns 400 when listing knowledge with invalid query params', async () => {
+    await request(app.getHttpServer()).get('/knowledge').query({ status: 'BOGUS' }).expect(400);
+    await request(app.getHttpServer()).get('/knowledge').query({ limit: 101 }).expect(400);
+    await request(app.getHttpServer()).get('/knowledge').query({ offset: -1 }).expect(400);
+  });
 });

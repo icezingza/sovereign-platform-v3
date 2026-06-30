@@ -155,4 +155,55 @@ describe.each(factories)('%s — Repository Contract', (_, factory) => {
     const events = knowledge.pullEvents();
     expect(events).toHaveLength(1);
   });
+
+  describe('findAll()', () => {
+    it('returns an empty array when no entries exist', async () => {
+      expect(await repo.findAll()).toEqual([]);
+    });
+
+    it('returns entries ordered by createdAt descending by default', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const first = makeKnowledge(clock);
+      await repo.save(first);
+      clock.tick(1000);
+      const second = makeKnowledge(clock);
+      await repo.save(second);
+      clock.tick(1000);
+      const third = makeKnowledge(clock);
+      await repo.save(third);
+
+      const found = await repo.findAll();
+
+      expect(found.map((k) => k.id.value)).toEqual([third.id.value, second.id.value, first.id.value]);
+    });
+
+    it('filters by status', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const active = makeKnowledge(clock);
+      await repo.save(active);
+      const archived = makeKnowledge(clock);
+      archived.archive(clock);
+      await repo.save(archived);
+
+      const found = await repo.findAll({ status: KnowledgeStatus.ARCHIVED });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(archived.id.value);
+    });
+
+    it('respects limit and offset', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const ids: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        const knowledge = makeKnowledge(clock);
+        ids.unshift(knowledge.id.value);
+        await repo.save(knowledge);
+        clock.tick(1000);
+      }
+
+      const page = await repo.findAll({ limit: 2, offset: 1 });
+
+      expect(page.map((k) => k.id.value)).toEqual(ids.slice(1, 3));
+    });
+  });
 });

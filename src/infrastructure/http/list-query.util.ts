@@ -21,13 +21,17 @@ export function parseListQuery<TStatus extends string>(
   }
 
   if (query.search !== undefined) {
-    if (typeof query.search !== 'string' || query.search.trim().length === 0) {
+    if (typeof query.search !== 'string') {
       throw new BadRequestException('"search" must be a non-empty string');
     }
-    if (query.search.length > 200) {
+    const trimmedSearch = query.search.trim();
+    if (trimmedSearch.length === 0) {
+      throw new BadRequestException('"search" must be a non-empty string');
+    }
+    if (trimmedSearch.length > 200) {
       throw new BadRequestException('"search" must be at most 200 characters');
     }
-    result.search = query.search;
+    result.search = trimmedSearch;
   }
 
   if (query.limit !== undefined) {

@@ -190,6 +190,7 @@ describe('Composition root (HTTP)', () => {
     await request(app.getHttpServer()).get('/memories').query({ limit: 0 }).expect(400);
     await request(app.getHttpServer()).get('/memories').query({ offset: -1 }).expect(400);
     await request(app.getHttpServer()).get('/memories').query({ search: '' }).expect(400);
+    await request(app.getHttpServer()).get('/memories').query({ search: '   ' }).expect(400);
     await request(app.getHttpServer()).get('/memories').query({ search: 'x'.repeat(201) }).expect(400);
   });
 
@@ -206,6 +207,13 @@ describe('Composition root (HTTP)', () => {
       .expect(200);
 
     expect(searchResponse.body.map((m: { id: string }) => m.id)).toEqual([id]);
+
+    const trimmedSearchResponse = await request(app.getHttpServer())
+      .get('/memories')
+      .query({ search: '  XYZZY123  ' })
+      .expect(200);
+
+    expect(trimmedSearchResponse.body.map((m: { id: string }) => m.id)).toEqual([id]);
   });
 
   it('lists knowledge entries and filters them by status', async () => {

@@ -110,6 +110,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.5** ✅ | `MemoryRepository` interface, `MemorySnapshot` mapper, Drizzle/SQLite adapter, repository contract tests (71 tests total) |
 | **2.6** ✅ | Application layer: command handlers, `EventBus` port, `InMemoryEventBus` adapter (84 tests total) |
 | **2.7** ✅ | Outbox pattern, `UnitOfWork` port, `OutboxProcessor`, `DispatchingEventBus` async consumers (105 tests total) |
+| **2.8** ✅ | `OutboxPollingDriver` — interval-based scheduler for `OutboxProcessor.processPending()` (112 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -207,4 +208,20 @@ await this.unitOfWork.execute(async ({ repo, outbox }) => {
 - `drizzle.unit-of-work.spec.ts` — verifies the manual transaction wrapper actually commits both tables together on success and rolls back both on a thrown error, plus that reads via `repo.findById()` see prior writes within the same unit of work.
 - `outbox-processor.spec.ts` — `processPending()` behavior (publish + mark processed, no-op when empty, no reprocessing, `limit`), and `DispatchingEventBus` routing events to the correct `EventConsumer` by `eventType`.
 
-Not yet implemented: a scheduled/polling driver that calls `OutboxProcessor.processPending()` on an interval (currently it's invoked manually/by tests only), and real `EventConsumer` implementations (only `RecordingConsumer` exists, in tests).
+Not yet implemented (closed out in Sprint 2.8 below): a scheduled/polling driver that calls `OutboxProcessor.processPending()` on an interval. Still not implemented, and deliberately deferred: real `EventConsumer` implementations (only `RecordingConsumer` exists, in tests) — no concrete downstream consumer use case exists in the project yet.
+
+### Sprint 2.8 — Outbox Polling Driver (done)
+
+```
+src/
+├── application/services/
+│   └── outbox-polling-driver.ts                # OutboxPollingDriver: start()/stop() around OutboxProcessor.processPending()
+└── __tests__/application/services/
+    └── outbox-polling-driver.spec.ts            # jest.useFakeTimers() based scheduling tests
+```
+
+`OutboxPollingDriver` wraps an `OutboxProcessor` with `start()`/`stop()` and runs `processPending()` on a recursive `setTimeout` loop — the next tick is only scheduled after the current call settles (success or failure), so a single driver instance never has two overlapping `processPending()` calls in flight. This is a single-process mitigation of the "race condition in concurrent outbox processing" concern raised in the Sprint 2.7 PR review; true multi-process/distributed locking (e.g. `SELECT ... FOR UPDATE SKIP LOCKED`, not supported by SQLite) remains out of scope since nothing in this project runs multiple worker processes yet.
+
+Errors thrown by `processPending()` are caught per-tick and routed to an optional `onError` callback (default no-op) so a transient failure doesn't kill the polling loop. `start()` is idempotent (calling it while already running is a no-op); `stop()` clears the pending timer.
+
+Real `EventConsumer` implementations remain deliberately out of scope (see note above).

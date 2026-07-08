@@ -1,5 +1,8 @@
 import { Knowledge } from '../../../domain/knowledge/knowledge';
-import { KnowledgeRepository } from '../../../domain/knowledge/knowledge-repository.interface';
+import {
+  KnowledgeRepository,
+  ListKnowledgeOptions,
+} from '../../../domain/knowledge/knowledge-repository.interface';
 import { KnowledgeSnapshot } from '../../../domain/knowledge/knowledge-snapshot';
 import { KnowledgeId } from '../../../domain/memory/value-objects/knowledge-id';
 
@@ -18,5 +21,15 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async delete(id: KnowledgeId): Promise<void> {
     this.store.delete(id.value);
+  }
+
+  async findAll(options: ListKnowledgeOptions = {}): Promise<Knowledge[]> {
+    const { status } = options;
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
+    const snapshots = [...this.store.values()]
+      .filter((snapshot) => !status || snapshot.status === status)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return snapshots.slice(offset, offset + limit).map((snapshot) => Knowledge.reconstitute(snapshot));
   }
 }

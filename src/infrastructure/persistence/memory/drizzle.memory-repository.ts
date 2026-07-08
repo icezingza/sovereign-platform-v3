@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
 import { MemoryRecord } from '../../../domain/memory/memory-record';
-import { MemoryRepository } from '../../../domain/memory/memory-repository.interface';
+import { ListMemoriesOptions, MemoryRepository } from '../../../domain/memory/memory-repository.interface';
 import { MemoryId } from '../../../domain/memory/value-objects/memory-id';
 import { MemoryMapper } from './mappers/memory.mapper';
 import { memoryRecordsTable } from './schema/memory-records.schema';
@@ -46,5 +46,20 @@ export class DrizzleMemoryRepository implements MemoryRepository {
       .delete(memoryRecordsTable)
       .where(eq(memoryRecordsTable.id, id.value))
       .run();
+  }
+
+  async findAll(options: ListMemoriesOptions = {}): Promise<MemoryRecord[]> {
+    const { status } = options;
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
+    const rows = this.db
+      .select()
+      .from(memoryRecordsTable)
+      .where(status ? eq(memoryRecordsTable.status, status) : undefined)
+      .orderBy(desc(memoryRecordsTable.createdAt))
+      .limit(limit)
+      .offset(offset)
+      .all();
+    return rows.map((row) => MemoryRecord.reconstitute(MemoryMapper.toSnapshot(row)));
   }
 }

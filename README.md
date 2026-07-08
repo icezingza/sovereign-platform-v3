@@ -1,61 +1,92 @@
 # NaMo Sovereign Platform v3
 
-NaMo Sovereign Platform v3 เป็นระบบความจำและกระบวนการคิดเชิง AI ที่ออกแบบตามแนวทาง DDD (Domain-Driven Design) เขียนด้วย TypeScript (monorepo planned)
+**Advanced AI Memory & Cognition System** built with Domain-Driven Design (DDD) in TypeScript.
 
-## คำอธิบายสั้น
-- DDD-based AI memory & cognition system
-- โดเมนหลัก: MemoryRecord aggregate (สถานะ: ACTIVE, ARCHIVED, FORGOTTEN, DELETED)
+A robust, testable foundation for building intelligent agents with persistent memory, state management, and cognitive capabilities.
 
-## Quickstart
-1. ติดตั้ง dependencies
+## ✨ Features
 
-   npm ci
+- **Domain-Driven Design Architecture**: Clean separation of concerns (Domain, Application, Infrastructure)
+- **Rich Domain Model**: `MemoryRecord` aggregate with full lifecycle management (Active, Archived, Forgotten, Deleted)
+- **Event-Driven**: Domain events for memory changes and state transitions
+- **Immutable & Testable**: Snapshot/reconstitute pattern + deterministic testing with FakeClock
+- **Persistence Ready**: SQLite adapter (better-sqlite3) with repository pattern
+- **TypeScript First**: Full type safety and modern development experience
+- **Comprehensive Testing**: Jest unit tests with high coverage focus on domain logic
 
-2. ตรวจสอบชนิดไฟล์ (TypeScript)
+## Quick Start
 
-   npm run typecheck
+```bash
+# 1. Clone the repository
+git clone https://github.com/icezingza/sovereign-platform-v3.git
+cd sovereign-platform-v3
 
-3. รันทดสอบ
+# 2. Install dependencies
+npm ci
 
-   npm test
+# 3. Type check
+npm run typecheck
 
-4. รันแบบ watch
+# 4. Run tests
+npm test
 
-   npm run test:watch
+# 5. Run tests in watch mode
+npm run test:watch
+```
 
-## โครงสร้างโปรเจกต์ (โดยย่อ)
-- src/
-  - domain/ — โดเมนหลัก (MemoryRecord อยู่ใน `src/domain/memory/`)
-  - infrastructure/ — adapters เช่น repository, mappers
-  - __tests__/ — unit tests (Jest)
+## Project Structure
 
-สถาปัตยกรรมหลัก: Domain ← Application ← Infrastructure
-- Domain: ไม่มี dependency กับ framework ภายนอก
-- Application: orchestrates (ไม่ใส่ business logic)
-- Infrastructure: adapters (persistence, ORM)
+```
+src/
+├── domain/           # Core business logic (no external dependencies)
+│   └── memory/       # MemoryRecord aggregate, value objects, events, errors
+├── application/      # Use cases and orchestrators
+├── infrastructure/   # Adapters (repositories, persistence, external services)
+└── __tests__/        # Unit and integration tests
+```
 
-## การทดสอบและ conventions
-- ใช้ Jest (ดู jest.config.js)
-- tests สำคัญ: `src/__tests__/domain/memory/memory-record.spec.ts`
-- ใช้ FakeClock เพื่อให้เวลา deterministic
-- Snapshot/reconstitute pattern: `toSnapshot()` และ `reconstitute()`
+**Key Patterns**:
+- **Domain**: Pure business rules
+- **Application**: Coordinates use cases without business logic
+- **Infrastructure**: Concrete implementations
 
-## สคริปต์ที่สำคัญ (จาก package.json)
-- npm run typecheck — tsc --noEmit
-- npm test — jest
-- npm run test:coverage — jest --coverage
+## Core Concepts
 
-## ข้อควรระวัง
-- better-sqlite3 เป็น native dependency ที่ต้องคอมไพล์บน runner/เครื่อง dev — ถ้า CI ล้ม อาจต้องติดตั้ง build tools (ตัวอย่าง workflow ติดตั้ง `build-essential` และ `python3`)
-- ใน CI เราใช้ `--runInBand` กับ Jest เพื่อลดปัญหา race conditions กับไฟล์ SQLite
+- **MemoryRecord**: The central entity representing a piece of knowledge or experience
+- **MemoryStatus**: Lifecycle states with clear transition rules
+- **Snapshot/Reconstitute**: For persistence and event sourcing compatibility
+- **Domain Events**: Track changes in memory state
 
-## CI
-- มี workflow ตัวอย่าง `.github/workflows/ci.yml` ใน branch นี้ที่จะรัน typecheck และ tests บน Node.js 18 และ 20
+## Scripts
+
+- `npm run typecheck` — TypeScript compilation check
+- `npm test` — Run all tests
+- `npm run test:coverage` — Tests with coverage report
+- `npm run test:watch` — Watch mode for development
+
+## Roadmap to Production / Commercialization
+
+1. **Documentation** (In Progress)
+2. **npm Package** publishing
+3. **Example Applications** (Agent memory integration)
+4. **Advanced Features** (Memory retrieval strategies, forgetting curves, vector search integration)
+5. **API Layer** (REST/GraphQL if needed)
+6. **Deployment Examples** (Docker, cloud)
 
 ## Contributing
-- โปรดเปิด Pull Requestสำหรับงานใหม่ และรัน tests/local typecheck ก่อน
-- หากต้องการ ผมสามารถช่วยตั้ง Dependabot, PR templates, และ branch protection ได้
+
+Contributions welcome! Please:
+1. Fork the repo
+2. Create a feature branch
+3. Run `npm run typecheck` and `npm test`
+4. Submit a Pull Request
+
+See `CLAUDE.md` for detailed architecture notes.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-(เอกสารนี้ย่อจาก CLAUDE.md — หากต้องการ README ภาษาอังกฤษแบบเต็มหรือจะเพิ่มส่วน Contribution / Badge / Examples เพิ่มเติม แจ้งผมได้)
+**Built with ❤️ for sovereign AI systems**

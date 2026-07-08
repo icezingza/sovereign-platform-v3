@@ -186,4 +186,102 @@ describe.each(factories)('%s — Repository Contract', (_, factory) => {
     const events = memory.pullEvents();
     expect(events).toHaveLength(1);
   });
+
+  describe('findAll()', () => {
+    it('returns an empty array when no records exist', async () => {
+      expect(await repo.findAll()).toEqual([]);
+    });
+
+    it('returns records ordered by createdAt descending by default', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const first = makeMemory(clock);
+      await repo.save(first);
+      clock.tick(1000);
+      const second = makeMemory(clock);
+      await repo.save(second);
+      clock.tick(1000);
+      const third = makeMemory(clock);
+      await repo.save(third);
+
+      const found = await repo.findAll();
+
+      expect(found.map((m) => m.id.value)).toEqual([third.id.value, second.id.value, first.id.value]);
+    });
+
+    it('filters by status', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const active = makeMemory(clock);
+      await repo.save(active);
+      const archived = makeMemory(clock);
+      archived.archive(clock);
+      await repo.save(archived);
+
+      const found = await repo.findAll({ status: MemoryStatus.ARCHIVED });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(archived.id.value);
+    });
+
+    it('respects limit and offset', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const ids: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        const memory = makeMemory(clock);
+        ids.unshift(memory.id.value);
+        await repo.save(memory);
+        clock.tick(1000);
+      }
+
+      const page = await repo.findAll({ limit: 2, offset: 1 });
+
+      expect(page.map((m) => m.id.value)).toEqual(ids.slice(1, 3));
+    });
+
+    it('filters by content search (case-insensitive substring)', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const apple = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'I like apples',
+        Importance.create(5),
+        clock,
+      );
+      await repo.save(apple);
+      const banana = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'I like bananas',
+        Importance.create(5),
+        clock,
+      );
+      await repo.save(banana);
+
+      const found = await repo.findAll({ search: 'APPLE' });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(apple.id.value);
+    });
+
+    it('combines status filter and content search', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const activeApple = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'apple pie',
+        Importance.create(5),
+        clock,
+      );
+      await repo.save(activeApple);
+      const archivedApple = MemoryRecord.create(
+        MemoryId.create(randomUUID()),
+        'apple tart',
+        Importance.create(5),
+        clock,
+      );
+      archivedApple.archive(clock);
+      await repo.save(archivedApple);
+
+      const found = await repo.findAll({ status: MemoryStatus.ARCHIVED, search: 'apple' });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(archivedApple.id.value);
+    });
+  });
 });

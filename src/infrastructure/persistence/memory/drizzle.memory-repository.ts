@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
 import { MemoryRecord } from '../../../domain/memory/memory-record';
-import { MemoryRepository } from '../../../domain/memory/memory-repository.interface';
+import { ListMemoriesOptions, MemoryRepository } from '../../../domain/memory/memory-repository.interface';
 import { MemoryId } from '../../../domain/memory/value-objects/memory-id';
 import { MemoryMapper } from './mappers/memory.mapper';
 import { memoryRecordsTable } from './schema/memory-records.schema';
@@ -46,5 +46,23 @@ export class DrizzleMemoryRepository implements MemoryRepository {
       .delete(memoryRecordsTable)
       .where(eq(memoryRecordsTable.id, id.value))
       .run();
+  }
+
+  async findAll(options: ListMemoriesOptions = {}): Promise<MemoryRecord[]> {
+    const { status, search } = options;
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
+    const conditions = [];
+    if (status) conditions.push(eq(memoryRecordsTable.status, status));
+    if (search) conditions.push(like(memoryRecordsTable.content, `%${search}%`));
+    const rows = this.db
+      .select()
+      .from(memoryRecordsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(memoryRecordsTable.createdAt))
+      .limit(limit)
+      .offset(offset)
+      .all();
+    return rows.map((row) => MemoryRecord.reconstitute(MemoryMapper.toSnapshot(row)));
   }
 }

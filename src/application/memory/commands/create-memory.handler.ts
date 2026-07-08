@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto';
 
-import { EventBus } from '../../ports/event-bus.interface';
+import { UnitOfWork } from '../../ports/unit-of-work.interface';
 import { MemoryRecord } from '../../../domain/memory/memory-record';
-import { MemoryRepository } from '../../../domain/memory/memory-repository.interface';
 import { TimeProvider } from '../../../domain/memory/time/time-provider.interface';
 import { Importance } from '../../../domain/memory/value-objects/importance';
 import { MemoryId } from '../../../domain/memory/value-objects/memory-id';
+import { EventSerializer } from '../mappers/event-serializer';
 
 export interface CreateMemoryCommand {
   content: string;
@@ -14,22 +14,24 @@ export interface CreateMemoryCommand {
 
 export class CreateMemoryHandler {
   constructor(
-    private readonly repo: MemoryRepository,
-    private readonly eventBus: EventBus,
+    private readonly unitOfWork: UnitOfWork,
     private readonly clock: TimeProvider,
   ) {}
 
   async execute(command: CreateMemoryCommand): Promise<MemoryId> {
     const id = MemoryId.create(randomUUID());
-    const memory = MemoryRecord.create(
-      id,
-      command.content,
-      Importance.create(command.importance),
-      this.clock,
-    );
 
-    await this.repo.save(memory);
-    await this.eventBus.publish(memory.pullEvents());
+    await this.unitOfWork.execute(async ({ repo, outbox }) => {
+      const memory = MemoryRecord.create(
+        id,
+        command.content,
+        Importance.create(command.importance),
+        this.clock,
+      );
+
+      await repo.save(memory);
+      await outbox.append(EventSerializer.toOutboxEvents(memory.pullEvents()));
+    });
 
     return id;
   }

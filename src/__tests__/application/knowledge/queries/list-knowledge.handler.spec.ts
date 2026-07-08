@@ -43,4 +43,19 @@ describe('ListKnowledgeHandler', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('k2');
   });
+
+  it('forwards the search filter to the repository', async () => {
+    const repo = new InMemoryKnowledgeRepository();
+    const clock = new FakeClock(BASE_DATE);
+    const apple = Knowledge.create(KnowledgeId.create('k1'), 'I like apples', clock);
+    await repo.save(apple);
+    const banana = Knowledge.create(KnowledgeId.create('k2'), 'I like bananas', clock);
+    await repo.save(banana);
+
+    const handler = new ListKnowledgeHandler(repo);
+    const result = await handler.execute({ search: 'apple' });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('k1');
+  });
 });

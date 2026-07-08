@@ -189,6 +189,31 @@ describe('Composition root (HTTP)', () => {
     await request(app.getHttpServer()).get('/memories').query({ status: 'BOGUS' }).expect(400);
     await request(app.getHttpServer()).get('/memories').query({ limit: 0 }).expect(400);
     await request(app.getHttpServer()).get('/memories').query({ offset: -1 }).expect(400);
+    await request(app.getHttpServer()).get('/memories').query({ search: '' }).expect(400);
+    await request(app.getHttpServer()).get('/memories').query({ search: '   ' }).expect(400);
+    await request(app.getHttpServer()).get('/memories').query({ search: 'x'.repeat(201) }).expect(400);
+  });
+
+  it('filters memories by content search', async () => {
+    const createResponse = await request(app.getHttpServer())
+      .post('/memories')
+      .send({ content: 'a very unique searchable phrase xyzzy123', importance: 5 })
+      .expect(201);
+    const { id } = createResponse.body;
+
+    const searchResponse = await request(app.getHttpServer())
+      .get('/memories')
+      .query({ search: 'XYZZY123' })
+      .expect(200);
+
+    expect(searchResponse.body.map((m: { id: string }) => m.id)).toEqual([id]);
+
+    const trimmedSearchResponse = await request(app.getHttpServer())
+      .get('/memories')
+      .query({ search: '  XYZZY123  ' })
+      .expect(200);
+
+    expect(trimmedSearchResponse.body.map((m: { id: string }) => m.id)).toEqual([id]);
   });
 
   it('lists knowledge entries and filters them by status', async () => {
@@ -226,5 +251,22 @@ describe('Composition root (HTTP)', () => {
     await request(app.getHttpServer()).get('/knowledge').query({ status: 'BOGUS' }).expect(400);
     await request(app.getHttpServer()).get('/knowledge').query({ limit: 101 }).expect(400);
     await request(app.getHttpServer()).get('/knowledge').query({ offset: -1 }).expect(400);
+    await request(app.getHttpServer()).get('/knowledge').query({ search: '' }).expect(400);
+    await request(app.getHttpServer()).get('/knowledge').query({ search: 'x'.repeat(201) }).expect(400);
+  });
+
+  it('filters knowledge entries by content search', async () => {
+    const createResponse = await request(app.getHttpServer())
+      .post('/knowledge')
+      .send({ content: 'a very unique searchable phrase wibble456' })
+      .expect(201);
+    const { id } = createResponse.body;
+
+    const searchResponse = await request(app.getHttpServer())
+      .get('/knowledge')
+      .query({ search: 'WIBBLE456' })
+      .expect(200);
+
+    expect(searchResponse.body.map((k: { id: string }) => k.id)).toEqual([id]);
   });
 });

@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
 import { MemoryRecord } from '../../../domain/memory/memory-record';
@@ -49,13 +49,16 @@ export class DrizzleMemoryRepository implements MemoryRepository {
   }
 
   async findAll(options: ListMemoriesOptions = {}): Promise<MemoryRecord[]> {
-    const { status } = options;
+    const { status, search } = options;
     const limit = options.limit ?? 50;
     const offset = options.offset ?? 0;
+    const conditions = [];
+    if (status) conditions.push(eq(memoryRecordsTable.status, status));
+    if (search) conditions.push(like(memoryRecordsTable.content, `%${search}%`));
     const rows = this.db
       .select()
       .from(memoryRecordsTable)
-      .where(status ? eq(memoryRecordsTable.status, status) : undefined)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(memoryRecordsTable.createdAt))
       .limit(limit)
       .offset(offset)

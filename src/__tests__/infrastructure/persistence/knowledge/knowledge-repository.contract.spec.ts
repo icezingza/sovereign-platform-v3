@@ -205,5 +205,32 @@ describe.each(factories)('%s — Repository Contract', (_, factory) => {
 
       expect(page.map((k) => k.id.value)).toEqual(ids.slice(1, 3));
     });
+
+    it('filters by content search (case-insensitive substring)', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const apple = Knowledge.create(KnowledgeId.create(randomUUID()), 'I like apples', clock);
+      await repo.save(apple);
+      const banana = Knowledge.create(KnowledgeId.create(randomUUID()), 'I like bananas', clock);
+      await repo.save(banana);
+
+      const found = await repo.findAll({ search: 'APPLE' });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(apple.id.value);
+    });
+
+    it('combines status filter and content search', async () => {
+      const clock = new FakeClock(BASE_DATE);
+      const activeApple = Knowledge.create(KnowledgeId.create(randomUUID()), 'apple pie', clock);
+      await repo.save(activeApple);
+      const archivedApple = Knowledge.create(KnowledgeId.create(randomUUID()), 'apple tart', clock);
+      archivedApple.archive(clock);
+      await repo.save(archivedApple);
+
+      const found = await repo.findAll({ status: KnowledgeStatus.ARCHIVED, search: 'apple' });
+
+      expect(found).toHaveLength(1);
+      expect(found[0].id.value).toBe(archivedApple.id.value);
+    });
   });
 });

@@ -44,4 +44,19 @@ describe('ListMemoriesHandler', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('m2');
   });
+
+  it('forwards the search filter to the repository', async () => {
+    const repo = new InMemoryMemoryRepository();
+    const clock = new FakeClock(BASE_DATE);
+    const apple = MemoryRecord.create(MemoryId.create('m1'), 'I like apples', Importance.create(5), clock);
+    await repo.save(apple);
+    const banana = MemoryRecord.create(MemoryId.create('m2'), 'I like bananas', Importance.create(5), clock);
+    await repo.save(banana);
+
+    const handler = new ListMemoriesHandler(repo);
+    const result = await handler.execute({ search: 'apple' });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('m1');
+  });
 });

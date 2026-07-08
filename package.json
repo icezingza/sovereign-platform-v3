@@ -1,13 +1,23 @@
 {
   "name": "sovereign-platform-v3",
   "version": "0.1.0",
-  "private": true,
+  "description": "Advanced AI Memory & Cognition System built with Domain-Driven Design (DDD) in TypeScript. Robust foundation for intelligent agents with persistent memory.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/icezingza/sovereign-platform-v3.git"
+  },
+  "keywords": ["ai", "memory", "ddd", "typescript", "agent", "cognition", "sovereign-ai"],
+  "author": "icezingza",
+  "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:single": "jest --testPathPattern",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "build": "tsc"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

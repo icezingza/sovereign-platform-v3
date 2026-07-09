@@ -118,6 +118,10 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **2.11** ✅ | `Knowledge` aggregate (domain + persistence + application + HTTP), `UnitOfWork` extended to carry `knowledgeRepo`, `LinkKnowledgeHandler` now validates the linked knowledge actually exists (169 tests total) |
 | **2.12** ✅ | List/search queries: `findAll()` on both repositories, `ListMemoriesHandler`/`ListKnowledgeHandler`, `GET /memories` and `GET /knowledge` with status filter + limit/offset pagination (197 tests total) |
 | **2.13** ✅ | Content search: `search` filter (case-insensitive substring) added to `findAll()` on both repositories, composable with the existing status filter, exposed via `?search=` on `GET /memories` and `GET /knowledge` (209 tests total) |
+| **Phase 4A Sprint 1** ✅ | Relationship View single-source: `RelationshipView` as unified input to `derivePersonaState`; `resolveRelationshipView()` as single producer (flag-gated); persona-related string concat eliminated in context builder |
+| **Phase 4A Sprint 2** ✅ | Soul Core consolidation: `derivePersonaState(DerivePersonaStateInput)` object-param API; `renderPersonaBlock()` as single persona-assembly routine; `PersonaState` readonly fields + Object.freeze(); first-class `narrationTone`/`dimensionNotes`/`overlay` fields (84 tests) |
+| **Phase 4A Sprint 3** ✅ | Context Allocation Engine: centralized allocator replacing append-style composition; tier-based budget (mandatory/protected/optional); Memory Floor + Lore Cap + Shared Optional Budget; `PromptSnapshot` for debug (98 tests) |
+| **Phase 4B Sprint 1** ✅ | Lore Runtime Foundation: generic lore retrieval engine (pure domain); LoreEntry schema + LoreMatch; lexical matching (primary/secondary keys, whole-word, case-insensitive, deterministic); constant/priority/insertionOrder/probability ranking; runtime guards (reject activationScript, extensions, unknown executable fields) (242 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -348,3 +352,54 @@ Sprint 2.12's title was "List/Search queries" but only status filtering shipped 
 **HTTP validation**: `parseListQuery()` gained a `search` block — must be a non-empty string (post-trim) up to 200 characters, else 400. No `MemoryController`/`KnowledgeController` changes were needed: both controllers' `list()` methods already forward the entire `parseListQuery()` result to the handler, and `ListMemoriesQuery`/`ListKnowledgeQuery` are type aliases of the options interfaces, so `search` flows through automatically once the interface and adapters supported it.
 
 **Tests**: `memory-repository.contract.spec.ts` and `knowledge-repository.contract.spec.ts` each gained two cases inside the `findAll()` describe block — case-insensitive substring search, and search combined with a status filter — run against both adapters. `list-memories.handler.spec.ts`/`list-knowledge.handler.spec.ts` gained a "forwards the search filter" case each. `composition-root.e2e.spec.ts` gained a content-search case and two 400 cases (empty string, 201-character string) for both `GET /memories` and `GET /knowledge`. 209 tests total. Manual verification: built with `npm run build`, ran `node dist/main.js` against a real on-disk SQLite file, curled case-insensitive search against both `/memories` and `/knowledge`, confirmed empty-string and over-length `search` both return 400, and confirmed `status` + `search` combine correctly (`?status=ACTIVE&search=apple`).
+
+### Phase 4B Sprint 1 — Lore Runtime Foundation (done)
+
+```
+src/
+├── core/lore/
+│   ├── lore-types.ts                 # LoreEntry, LoreScope, LoreMatch, LoreMatchResult, LoreRetrievalConfig/Input
+│   ├── lore-matcher.ts               # LoreMatcher: lexical matching (primary/secondary keys, whole-word, case-insensitive)
+│   ├── lore-ranker.ts                # LoreRanker: deterministic ranking (constant → matchType → priority → insertionOrder → probability)
+│   └── lore-runtime.ts               # LoreRuntime: pipeline (collect → filter → match → rank → cap); runtime guards
+└── __tests__/core/lore/
+    └── lore-runtime.spec.ts          # 33 regression tests: lexical matching, ranking, constant, cooldown, minMessages, guards
+```
+
+**LoreEntry schema**: `id`, `scope` ('world' or 'character'), `keys` (primary keywords), `secondaryKeys` (optional), `content`, `priority`, `insertionOrder`, `probability`, `enabled`, `constant`, `minMessages`, `cooldown`, `lastMatchedAt`, `relationshipConditions`, `memoryConditions`, `metadata`.
+
+**Lexical matching**: `containsWholeWord()` checks case-insensitively for whole-word matches (word boundaries recognized). Primary keys rank above secondary; one match per key type stops searching.
+
+**Deterministic ranking**: layered sort (lower value = higher rank): isConstant (0 for true, 1 for false) → matchType (0 primary, 1 secondary, 2 no-match) → negated priority (higher values rank first) → insertionOrder (lower first) → negated probability (higher values rank first). Constant entries always rank first regardless of match/priority; non-constant entries ranked by match type within each rank.
+
+**Retrieval pipeline** (`LoreRuntime.retrieveLore(input)`):
+1. **Collect**: filter by enabled, scope, currentMessageCount ≥ minMessages, and cooldown expiry
+2. **Match**: apply lexical matching for all collected entries
+3. **Rank**: deterministic sort
+4. **Cap**: slice to maxLore (default 6)
+
+**Runtime guards** (`validateLoreEntry`): reject entries with `activationScript`, `extensions`, or unknown fields matching code-related keywords (`script`, `execute`, `eval`, `function`, `callback`, `handler`, `on*` prefix, `match`, `transform`, `manipulate`). Metadata field is explicitly allowed as the safe extension point.
+
+**Scope filtering**: `'world'` entries always included; `'character'` entries only when `activeCharacterId` is set.
+
+**Cooldown**: entries with `cooldown` set are excluded if `now - lastMatchedAt < cooldown`; default `now` is `Date.now()`.
+
+**minMessages**: late-game activation — entries only eligible if `currentMessageCount ≥ minMessages`.
+
+**Token estimation**: `estimateTokens(content)` = `Math.ceil(content.length / 4)` (matching Token_Budget.ts heuristic); summed across kept entries.
+
+**Tests** (33 cases, 242 tests total):
+- Lexical matching: case-insensitive, whole-word, partial-word rejection, compound phrases
+- Secondary keys: matched only if primary miss, preferred over secondary
+- Deterministic ranking: constant tier, priority, insertionOrder, matchType, probability
+- Constant entries: always included without keyword, null matchedKey
+- Disabled entries: filtered out
+- Cooldown: excluded within window, included after expiry
+- minMessages: excluded before threshold, included after
+- Scope filtering: world always, character only with activeCharacterId
+- Max lore cap: respects maxLore config, defaults to 6
+- Token estimation: ~1 per 4 chars, sums correctly
+- Runtime guards: reject activationScript, extensions, executable-looking unknowns; allow metadata
+- End-to-end scenarios: complex filtering with mixed conditions, empty results, array immutability
+
+**Not implemented**: Janitor JSON import, Scenario Packs, semantic search, UI integration. Phase 4B Sprint 2+ will wire lore into the context allocator and Prompt Composer.

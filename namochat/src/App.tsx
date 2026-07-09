@@ -55,7 +55,11 @@ export const App = () => {
 
   return (
     <div className="flex h-full flex-col">
-      <main className="min-h-0 flex-1 overflow-y-auto">{renderView(view)}</main>
+      {/* Keyed by view kind so each screen fades in on navigation. Chats keep a
+          stable key so streaming into a chat doesn't replay the transition. */}
+      <main key={view.name} className="animate-view-in min-h-0 flex-1 overflow-y-auto">
+        {renderView(view)}
+      </main>
       {/* Bottom nav — hidden while a chat is open so the composer owns the bottom edge */}
       {!isChatOpen && (
         <nav className="flex border-t border-surface-800 bg-surface-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">

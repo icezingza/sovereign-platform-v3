@@ -82,3 +82,16 @@ ContextBuilder (budget-gated) → provider.streamChat → CognitiveStreamParser 
 ## Sprint log
 
 - **Phase 1** — foundation (see `docs/MIGRATION.md`, PR #16). 26 tests.
+- **Phase 2** — depth:
+  - Character Consistency: `systemPromptOverride` ({{user}}/{{char}} substitution),
+    `buildPersonaLock` (consistency rules injected every turn, never budget-trimmed),
+    alternate greetings (`pickGreeting`), example dialogue anchored in the system prompt.
+  - Memory: semantic recall wired via best-effort `safeEmbed` (cosine when embeddings
+    available, lexical fallback); query vector reused for the user memory, reply embedded.
+    Memory inspector (pin/forget/world-memory) via `MemoryEngine.pin/forgetOne/listFor`.
+  - Roleplay/UI: world-lore editor, story-timeline UI + milestone pinning, image messages,
+    chat branching (`forkChat`, chatId remapped for per-chat recall). 32 tests.
+- **Phase 3** — polish: PWA (`public/{manifest.webmanifest,sw.js,icon.svg}`, SW registered in
+  prod only; cross-origin model calls never intercepted), windowed chat render (`WINDOW_SIZE`
+  + load-earlier), view-transition + reduced-motion animation pass. Backup encryption deferred
+  (low roleplay value).

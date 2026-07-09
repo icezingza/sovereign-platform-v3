@@ -11,6 +11,8 @@ import { sendMessage, regenerateLast, continueChat, stopStreaming } from '../../
 import { RelationshipEngine, DEFAULT_STAGES } from '../../core/relationship/relationship-engine';
 import { generateId } from '../../lib/utils';
 
+const WINDOW_SIZE = 60;
+
 export const ChatScreen = ({ chatId }: { chatId: string }) => {
   const chat = useChatStore((s) => s.chats.find((c) => c.id === chatId));
   const streamingMessageId = useChatStore((s) => s.streamingMessageId);
@@ -22,6 +24,9 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  // Windowed render: only the most recent messages are mounted; older ones
+  // load on demand so very long chats stay smooth (Performance, priority 5).
+  const [visibleCount, setVisibleCount] = useState(WINDOW_SIZE);
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
 
@@ -113,7 +118,18 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
 
       {/* Messages */}
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
-        {chat.messages.map((message) => (
+        {chat.messages.length > visibleCount && (
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVisibleCount((count) => count + WINDOW_SIZE)}
+            >
+              Load {Math.min(WINDOW_SIZE, chat.messages.length - visibleCount)} earlier messages
+            </Button>
+          </div>
+        )}
+        {chat.messages.slice(-visibleCount).map((message) => (
           <MessageBubble
             key={message.id}
             message={message}

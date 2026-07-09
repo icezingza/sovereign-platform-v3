@@ -1,5 +1,7 @@
 # NamoNexus Sovereign Platform v3
 
+> *Elevate your existence with NamoNexus.*
+
 [![CI](https://github.com/icezingza/sovereign-platform-v3/actions/workflows/ci.yml/badge.svg)](https://github.com/icezingza/sovereign-platform-v3/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/sovereign-platform-v3)](https://www.npmjs.com/package/sovereign-platform-v3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)

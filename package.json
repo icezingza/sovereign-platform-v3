@@ -1,7 +1,7 @@
 {
   "name": "sovereign-platform-v3",
   "version": "0.1.0",
-  "description": "Advanced AI Memory & Cognition System built with Domain-Driven Design (DDD) in TypeScript. Robust foundation for intelligent agents with persistent memory.",
+  "description": "NamoNexus Sovereign Platform — Advanced AI Memory & Cognition Engine built with Domain-Driven Design (DDD) in TypeScript. Robust foundation for intelligent agents with persistent memory. Elevate your existence with NamoNexus.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -42,9 +42,13 @@
     "sqlite",
     "drizzle-orm",
     "nestjs",
-    "sovereign-ai"
+    "sovereign-ai",
+    "namonexus"
   ],
-  "author": "icezingza",
+  "author": {
+    "name": "NamoNexus (icezingza)",
+    "url": "https://github.com/icezingza"
+  },
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",

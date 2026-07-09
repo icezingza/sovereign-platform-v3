@@ -1,14 +1,23 @@
-# NamoNexus Sovereign Platform v3
+<div align="center">
 
-> *Elevate your existence with NamoNexus.*
+# ⚡ NamoNexus Sovereign Platform
 
-[![CI](https://github.com/icezingza/sovereign-platform-v3/actions/workflows/ci.yml/badge.svg)](https://github.com/icezingza/sovereign-platform-v3/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/sovereign-platform-v3)](https://www.npmjs.com/package/sovereign-platform-v3)
+### *Elevate your existence with NamoNexus.*
+
+**Professional AI Memory & Cognition Engine** — TypeScript · Domain-Driven Design · Transactional Outbox
+
+[![npm version](https://img.shields.io/npm/v/sovereign-platform-v3?logo=npm&color=CB3837)](https://www.npmjs.com/package/sovereign-platform-v3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)](./tsconfig.json)
+[![Tests: 209 passing](https://img.shields.io/badge/tests-209%20passing-brightgreen?logo=jest)](./src/__tests__)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](./tsconfig.json)
+[![CI](https://github.com/icezingza/sovereign-platform-v3/actions/workflows/ci.yml/badge.svg)](https://github.com/icezingza/sovereign-platform-v3/actions/workflows/ci.yml)
+[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 
-**Professional AI Memory & Cognition Engine** built with TypeScript + Domain-Driven Design.
+[Quick Start](#-quick-start) · [Examples](./examples) · [REST API](#-rest-api) · [Architecture](#-architecture) · [Changelog](./CHANGELOG.md)
+
+</div>
+
+---
 
 A clean, testable, production-ready foundation for building intelligent agents with persistent long-term memory: a rich `MemoryRecord` aggregate with a strict lifecycle state machine, a `Knowledge` aggregate with validated linking, a transactional outbox for reliable event delivery, and a ready-to-run REST API — backed by **209 tests**.
 

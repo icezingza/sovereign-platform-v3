@@ -61,6 +61,9 @@
     "test:coverage": "jest --coverage",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@nestjs/testing": "^10.4.22",
     "@types/better-sqlite3": "^7.6.13",

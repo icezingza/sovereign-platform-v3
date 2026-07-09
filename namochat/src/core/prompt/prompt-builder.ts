@@ -24,17 +24,33 @@ export const buildSystemPrompt = (
     ? `Reply primarily in "${character.language}" unless the user clearly switches language.`
     : '';
 
-  return [
-    `You are ${character.name}, a roleplay character. Stay fully in character as ${character.name} ` +
+  // Character Consistency (priority 1): a per-character override replaces the
+  // default preamble verbatim, giving full authorial control over persona.
+  const preamble = character.systemPromptOverride?.trim()
+    ? character.systemPromptOverride.trim().replace(/\{\{user\}\}/g, options.userName).replace(/\{\{char\}\}/g, character.name)
+    : `You are ${character.name}, a roleplay character. Stay fully in character as ${character.name} ` +
       `in an ongoing story with ${options.userName}. Write immersive, contextual, varied replies — ` +
-      `never generic filler. Use *asterisks* for actions and narration.`,
+      `never generic filler. Use *asterisks* for actions and narration.`;
+
+  return [
+    preamble,
     section('Character', character.description),
     section('Personality', character.personality),
     section('Scenario', character.scenario),
     section('Identity', identityBlock),
+    // Example dialogue is always in the system prompt (few-shot anchoring for
+    // consistency), never pushed to the trimmable per-turn block.
     section('Example dialogue', character.exampleDialogue),
     language,
   ]
     .filter(Boolean)
     .join('\n\n');
+};
+
+// The persona lock: consistency rules rendered as an always-injected,
+// never-budget-trimmed reminder. Empty string when the card has none.
+export const buildPersonaLock = (character: CharacterCard): string => {
+  const rules = character.identity?.consistencyRules ?? [];
+  if (rules.length === 0) return '';
+  return `[Stay in character — non-negotiable]\n${rules.map((rule) => `- ${rule}`).join('\n')}`;
 };

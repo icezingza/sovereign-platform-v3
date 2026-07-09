@@ -3,7 +3,7 @@ import { useCharacterStore } from '../../stores/character-store';
 import { useChatStore } from '../../stores/chat-store';
 import { useUiStore } from '../../stores/ui-store';
 import { Button } from '../../components/ui/button';
-import { exportCharacterCard } from '../../core/character/character';
+import { exportCharacterCard, pickGreeting } from '../../core/character/character';
 import { downloadFile } from '../../lib/utils';
 
 export const CharacterProfile = ({ characterId }: { characterId: string }) => {
@@ -74,7 +74,7 @@ export const CharacterProfile = ({ characterId }: { characterId: string }) => {
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => {
-              const chat = createChat(character.id, character.firstMessage, character.name);
+              const chat = createChat(character.id, pickGreeting(character), character.name);
               navigate({ name: 'chat', chatId: chat.id });
             }}
           >

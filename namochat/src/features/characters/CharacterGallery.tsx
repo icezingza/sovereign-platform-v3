@@ -4,7 +4,7 @@ import { useCharacterStore } from '../../stores/character-store';
 import { useChatStore } from '../../stores/chat-store';
 import { useUiStore } from '../../stores/ui-store';
 import { Button } from '../../components/ui/button';
-import type { CharacterCard } from '../../core/character/character';
+import { pickGreeting, type CharacterCard } from '../../core/character/character';
 
 const CharacterTile = ({ character }: { character: CharacterCard }) => {
   const navigate = useUiStore((s) => s.navigate);
@@ -38,7 +38,7 @@ const CharacterTile = ({ character }: { character: CharacterCard }) => {
         className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
         onClick={(event) => {
           event.stopPropagation();
-          const chat = createChat(character.id, character.firstMessage, character.name);
+          const chat = createChat(character.id, pickGreeting(character), character.name);
           navigate({ name: 'chat', chatId: chat.id });
         }}
       >

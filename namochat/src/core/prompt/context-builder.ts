@@ -10,6 +10,7 @@ import { TokenBudget } from './token-budget';
 
 export interface TurnContextInput {
   persona: PersonaState;
+  personaLock: string; // consistency rules — mandatory, never trimmed (priority 1)
   memories: MemorySearchResult[];
   lore: LoreMatch[];
   storyRecap: string; // from StoryTimeline.summarizeRecent
@@ -19,24 +20,30 @@ export interface TurnContextInput {
 }
 
 export const buildTurnContext = (input: TurnContextInput): string => {
-  // Mandatory: persona reminder + stage/attachment directives (small, bounded).
+  // Mandatory blocks: persona lock (consistency) + persona reminder + stage
+  // directives. These are small, bounded, and never dropped for budget.
   const personaBlock = [
     `[Persona] ${input.persona.distilledIdentity}`,
     `[Relationship: ${input.persona.stageName}] ${input.persona.stageDirective} ${input.persona.attachmentDirective}`,
   ].join('\n');
+  const mandatoryBlocks = [input.personaLock, personaBlock].filter(Boolean);
 
   // Optional, priority-ordered candidates trimmed to the remaining budget.
+  // Order = roleplay value: story recap, then always-active world facts, then
+  // keyword-triggered lore, then recalled memories.
   const candidates: string[] = [];
   if (input.storyRecap) candidates.push(`[Story so far]\n${input.storyRecap}`);
-  for (const match of input.lore) {
+  const alwaysActive = input.lore.filter((m) => m.matchedKey === null);
+  const triggered = input.lore.filter((m) => m.matchedKey !== null);
+  for (const match of [...alwaysActive, ...triggered]) {
     candidates.push(`[World] ${match.entry.content}`);
   }
   for (const result of input.memories) {
     candidates.push(`[Memory] ${result.record.content}`);
   }
 
-  const mandatory = [input.systemPrompt, ...input.historyTexts, personaBlock];
+  const mandatory = [input.systemPrompt, ...input.historyTexts, ...mandatoryBlocks];
   const kept = input.budget.selectWithinBudget(mandatory, candidates);
 
-  return [personaBlock, ...kept].join('\n\n');
+  return [...mandatoryBlocks, ...kept].join('\n\n');
 };

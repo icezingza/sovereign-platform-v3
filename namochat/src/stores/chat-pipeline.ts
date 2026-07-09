@@ -11,12 +11,12 @@ import { derivePersonaState } from '../core/soul/soul-core';
 import { MemoryEngine } from '../core/memory/memory-engine';
 import { matchLore } from '../core/lore/lore-engine';
 import { summarizeRecent } from '../core/timeline/story-timeline';
-import { buildSystemPrompt } from '../core/prompt/prompt-builder';
+import { buildSystemPrompt, buildPersonaLock } from '../core/prompt/prompt-builder';
 import { buildTurnContext } from '../core/prompt/context-builder';
 import { TokenBudget } from '../core/prompt/token-budget';
 import { CognitiveStreamParser } from '../core/cognition/stream-parser';
 import { createProvider } from '../core/providers/model-router';
-import type { ChatTurn } from '../core/providers/types';
+import type { ChatTurn, ModelProvider } from '../core/providers/types';
 import type { CharacterCard } from '../core/character/character';
 import { useChatStore, type Chat, type ChatMessage } from './chat-store';
 import { useSettingsStore } from './settings-store';
@@ -33,6 +33,18 @@ export const stopStreaming = (): void => {
 };
 
 const emptyIdentity = { purpose: [], cognitiveStyle: [], emotionalSignature: [], consistencyRules: [] };
+
+// Best-effort embedding: never let a provider without embeddings, or a failed
+// embed call, break a turn. Falls back to undefined → lexical recall.
+const safeEmbed = async (provider: ModelProvider, text: string): Promise<number[] | undefined> => {
+  if (!provider.generateEmbedding || !text.trim()) return undefined;
+  try {
+    const vector = await provider.generateEmbedding(text);
+    return vector.length > 0 ? vector : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 // skipUserMemory: regenerate/continue re-run a turn with either an already-
 // remembered user message or an internal directive — neither belongs in
@@ -70,15 +82,22 @@ const runTurn = async (
 
   chatStore.patchChat(chat.id, { affect, relationship, timeline });
 
-  // 2. Soul Core persona state + recalled memories + lore.
+  // 2. Soul Core persona state + recalled memories + lore. Semantic recall
+  //    when we can embed the query, otherwise lexical (best-effort — a failed
+  //    embed must never break the turn; Memory is priority 2).
+  const provider = createProvider(providerConfig);
   const identity = new IdentityCapsule(character.identity ?? emptyIdentity);
   const persona = derivePersonaState(identity, affect, relationship, relationshipEngine);
   const memoryEngine = new MemoryEngine(chat.memories);
-  const memories = memoryEngine.recallLexical(chat.id, userText, 3);
+  const queryEmbedding = await safeEmbed(provider, userText);
+  const memories = queryEmbedding
+    ? memoryEngine.recallSemantic(chat.id, queryEmbedding, 3)
+    : memoryEngine.recallLexical(chat.id, userText, 3);
   const lore = matchLore(character.lorebook ?? [], userText);
 
   // 3. Prompt + budget-gated context.
   const systemPrompt = buildSystemPrompt(character, { userName });
+  const personaLock = buildPersonaLock(character);
   const history: ChatTurn[] = [
     ...chat.messages.slice(-HISTORY_TURNS).map<ChatTurn>((m) => ({
       role: m.role === 'user' ? 'user' : 'assistant',
@@ -92,6 +111,7 @@ const runTurn = async (
   });
   const context = buildTurnContext({
     persona,
+    personaLock,
     memories,
     lore,
     storyRecap: summarizeRecent(timeline, chat.id),
@@ -101,7 +121,6 @@ const runTurn = async (
   });
 
   // 4. Stream from the provider through the cognitive-stream parser.
-  const provider = createProvider(providerConfig);
   const parser = new CognitiveStreamParser();
   const assistantMessage: ChatMessage = {
     id: generateId(),
@@ -145,6 +164,7 @@ const runTurn = async (
   //    a memory, and re-run turns don't duplicate the user's record.
   const rememberedIds: string[] = [];
   if (!skipUserMemory) {
+    // Reuse the query vector already computed for recall — no extra call.
     rememberedIds.push(
       memoryEngine.remember({
         id: generateId(),
@@ -153,10 +173,12 @@ const runTurn = async (
         content: userText,
         emotionWeight: 0.5,
         timestamp: Date.now(),
+        embedding: queryEmbedding,
       }).id,
     );
   }
   if (visible.trim() && !hasError) {
+    const replyEmbedding = await safeEmbed(provider, visible);
     memoryEngine.remember({
       id: generateId(),
       chatId: chat.id,
@@ -164,6 +186,7 @@ const runTurn = async (
       content: visible,
       emotionWeight: 0.5,
       timestamp: Date.now(),
+      embedding: replyEmbedding,
     });
   }
   memoryEngine.evaluateInteraction(

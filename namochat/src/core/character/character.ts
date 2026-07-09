@@ -15,6 +15,8 @@ export interface CharacterCard {
   personality: string; // temperament summary (prompt-visible)
   scenario: string; // current setting/premise (prompt-visible)
   firstMessage: string; // greeting that opens a new chat
+  alternateGreetings?: string[]; // additional first-message variants (v2 cards)
+  systemPromptOverride?: string; // replaces the default preamble when set
   exampleDialogue?: string; // few-shot style examples
   avatarUrl?: string; // data: URI or remote URL
   tags: string[];
@@ -43,6 +45,20 @@ interface ImportInput {
 }
 
 const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim() !== '') : [];
+
+// All non-empty greetings for a card, primary first.
+export const greetingsOf = (card: CharacterCard): string[] =>
+  [card.firstMessage, ...(card.alternateGreetings ?? [])].filter((g) => g.trim() !== '');
+
+// Deterministic-free pick of a greeting variant when opening a new chat.
+export const pickGreeting = (card: CharacterCard, random: () => number = Math.random): string => {
+  const options = greetingsOf(card);
+  if (options.length === 0) return card.firstMessage;
+  return options[Math.floor(random() * options.length)];
+};
 
 // Accepts NamoChat native cards and SillyTavern/TavernAI v2 card JSON
 // ({ spec: 'chara_card_v2', data: {...} } or a flat v1 object).
@@ -78,6 +94,8 @@ export const importCharacterCard = ({ json, generateId, now }: ImportInput): Cha
     personality: asString(data.personality),
     scenario: asString(data.scenario),
     firstMessage: asString(data.first_mes),
+    alternateGreetings: asStringArray(data.alternate_greetings),
+    systemPromptOverride: asString(data.system_prompt) || undefined,
     exampleDialogue: asString(data.mes_example) || undefined,
     avatarUrl: asString(data.avatar) || undefined,
     tags: Array.isArray(data.tags) ? data.tags.filter((t): t is string => typeof t === 'string') : [],

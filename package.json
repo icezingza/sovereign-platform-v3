@@ -1,7 +1,7 @@
 {
-  "name": "sovereign-platform-v3",
+  "name": "@namonexus/sovereign-platform",
   "version": "0.1.0",
-  "description": "NamoNexus Sovereign Platform — Advanced AI Memory & Cognition Engine built with Domain-Driven Design (DDD) in TypeScript. Robust foundation for intelligent agents with persistent memory. Elevate your existence with NamoNexus.",
+  "description": "NamoNexus — Professional AI Memory & Cognition Engine. TypeScript · DDD · Transactional Outbox · SQLite. Persistent long-term memory for intelligent agents. Elevate your existence with NamoNexus.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -23,30 +23,31 @@
     "type": "git",
     "url": "git+https://github.com/icezingza/sovereign-platform-v3.git"
   },
-  "homepage": "https://github.com/icezingza/sovereign-platform-v3#readme",
+  "homepage": "https://namonexus.com",
   "bugs": {
     "url": "https://github.com/icezingza/sovereign-platform-v3/issues"
   },
   "keywords": [
-    "ai",
-    "memory",
+    "namonexus",
+    "namonexus-memory",
+    "ai-memory",
+    "long-term-memory",
+    "cognition",
     "ddd",
     "domain-driven-design",
     "typescript",
     "agent",
     "ai-agents",
-    "cognition",
-    "event-sourcing",
+    "transactional-outbox",
     "outbox-pattern",
-    "clean-architecture",
+    "event-driven",
     "sqlite",
     "drizzle-orm",
-    "nestjs",
-    "sovereign-ai",
-    "namonexus"
+    "nestjs"
   ],
   "author": {
-    "name": "NamoNexus (icezingza)",
+    "name": "Kanin Raksaraj",
+    "email": "contect@namonexus.com",
     "url": "https://github.com/icezingza"
   },
   "license": "MIT",

@@ -52,19 +52,22 @@ async function main() {
   // ── Use it ────────────────────────────────────────────────────────────────
   driver.start();
 
-  const id = await createMemory.execute({
-    content: 'Persisted through a real SQLite transaction',
-    importance: 7,
-  });
-  console.log('Created memory', id.value);
+  try {
+    const id = await createMemory.execute({
+      content: 'Persisted through a real SQLite transaction',
+      importance: 7,
+    });
+    console.log('Created memory', id.value);
 
-  const snapshot = await getMemoryById.execute({ id: id.value });
-  console.log('Read back:', snapshot?.content, '| version:', snapshot?.version);
+    const snapshot = await getMemoryById.execute({ id: id.value });
+    console.log('Read back:', snapshot?.content, '| version:', snapshot?.version);
 
-  // Give the polling driver a moment to drain the outbox, then shut down.
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  driver.stop();
-  sqlite.close();
+    // Give the polling driver a moment to drain the outbox, then shut down.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  } finally {
+    driver.stop();
+    sqlite.close();
+  }
 }
 
 main().catch((error) => {

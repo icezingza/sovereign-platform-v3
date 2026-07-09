@@ -1,18 +1,20 @@
-# Sovereign Platform v3
+# NamoNexus Sovereign Platform v3
 
 **Professional AI Memory & Cognition Engine** built with TypeScript + Domain-Driven Design.
 
-A clean, testable, production-ready foundation for building intelligent agents with persistent long-term memory.
+Elevate your existence with NamoNexus.
+
+A clean, testable, production-ready foundation for building intelligent agents with persistent long-term memory and strict cognitive architecture.
 
 ## ✨ Features
 
-- Rich `MemoryRecord` aggregate with full lifecycle management
-- Clean Domain-Driven Design architecture
-- Snapshot & Reconstitute pattern (Event Sourcing compatible)
+- Rich `MemoryRecord` aggregate with full lifecycle state machine
+- Strict Clean Architecture & Domain-Driven Design
+- Snapshot & Reconstitute pattern (Event Sourcing ready)
+- Outbox Pattern + UnitOfWork for data consistency
 - Deterministic testing with FakeClock
-- SQLite persistence adapter included
-- Comprehensive test suite with high domain coverage
-- Zero framework dependencies in the domain layer
+- Drizzle ORM + SQLite persistence
+- Nearly 210 comprehensive tests
 
 ## Quick Start
 
@@ -26,13 +28,13 @@ npm test
 
 ## Core Concepts
 
-- **MemoryRecord** — Central entity representing knowledge and experiences
-- **MemoryStatus** — Active, Archived, Forgotten, Deleted with strict transition rules
-- **Domain Events** — Track every state change
-- **Repository Pattern** — Clean persistence abstraction
+- **MemoryRecord** — Core aggregate with strict invariants
+- **MemoryStatus** — ACTIVE, ARCHIVED, FORGOTTEN, DELETED
+- **Knowledge Aggregate** — Linked knowledge management
+- **Domain Events + Outbox Pattern** — Reliable event processing
 
 ## License
 
-MIT © Icezingza
+MIT © Icezingza — NamoNexus
 
-Built for Sovereign AI Systems.
+Built to elevate existence.

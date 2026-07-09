@@ -88,10 +88,12 @@ export interface MemorySearchResult {
   score: number;
 }
 
+// Unicode-aware: keeps letters/digits of every script (Thai, CJK, Cyrillic,
+// accented Latin, ...), not just ASCII + Thai.
 const normalizeText = (text: string) =>
   text
     .toLowerCase()
-    .replace(/[^a-z0-9\u0e00-\u0e7f\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 

@@ -21,9 +21,10 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
   const character = characters.find((c) => c.id === chat?.characterId);
   const isStreaming = streamingMessageId !== null;
 
+  const lastMessageContent = chat?.messages[chat.messages.length - 1]?.content;
   useEffect(() => {
     scrollAnchor.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chat?.messages.length, chat?.messages[chat.messages.length - 1]?.content]);
+  }, [chat?.messages.length, lastMessageContent]);
 
   if (!chat) {
     return <div className="p-8 text-center text-zinc-500">Chat not found.</div>;

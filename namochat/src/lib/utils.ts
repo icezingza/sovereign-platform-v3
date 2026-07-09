@@ -18,5 +18,6 @@ export const downloadFile = (filename: string, content: string, type = 'applicat
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
-  URL.revokeObjectURL(url);
+  // Deferred: revoking synchronously can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };

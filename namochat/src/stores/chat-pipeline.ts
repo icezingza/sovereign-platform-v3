@@ -34,7 +34,15 @@ export const stopStreaming = (): void => {
 
 const emptyIdentity = { purpose: [], cognitiveStyle: [], emotionalSignature: [], consistencyRules: [] };
 
-const runTurn = async (chat: Chat, character: CharacterCard, userText: string): Promise<void> => {
+// skipUserMemory: regenerate/continue re-run a turn with either an already-
+// remembered user message or an internal directive — neither belongs in
+// long-term memory a second time.
+const runTurn = async (
+  chat: Chat,
+  character: CharacterCard,
+  userText: string,
+  skipUserMemory = false,
+): Promise<void> => {
   const chatStore = useChatStore.getState();
   const { provider: providerConfig, userName } = useSettingsStore.getState();
 
@@ -106,6 +114,7 @@ const runTurn = async (chat: Chat, character: CharacterCard, userText: string): 
 
   activeAbort = new AbortController();
   let visible = '';
+  let hasError = false;
   const pushVisible = (text: string) => {
     if (!text) return;
     visible += text;
@@ -120,6 +129,7 @@ const runTurn = async (chat: Chat, character: CharacterCard, userText: string): 
     );
     pushVisible(parser.flushRemaining().visibleText);
   } catch (error) {
+    hasError = true;
     if ((error as Error).name !== 'AbortError') {
       pushVisible(
         `\n\n> ⚠️ ${(error as Error).message || 'The model request failed. Check Settings.'}`,
@@ -131,16 +141,22 @@ const runTurn = async (chat: Chat, character: CharacterCard, userText: string): 
   }
 
   // 5. Persist the turn to long-term memory and re-weight by this turn's
-  //    signals (slimmed EvolutionEngine behavior).
-  const userMemory = memoryEngine.remember({
-    id: generateId(),
-    chatId: chat.id,
-    role: 'user',
-    content: userText,
-    emotionWeight: 0.5,
-    timestamp: Date.now(),
-  });
-  if (visible.trim()) {
+  //    signals (slimmed EvolutionEngine behavior). Error text never becomes
+  //    a memory, and re-run turns don't duplicate the user's record.
+  const rememberedIds: string[] = [];
+  if (!skipUserMemory) {
+    rememberedIds.push(
+      memoryEngine.remember({
+        id: generateId(),
+        chatId: chat.id,
+        role: 'user',
+        content: userText,
+        emotionWeight: 0.5,
+        timestamp: Date.now(),
+      }).id,
+    );
+  }
+  if (visible.trim() && !hasError) {
     memoryEngine.remember({
       id: generateId(),
       chatId: chat.id,
@@ -151,7 +167,7 @@ const runTurn = async (chat: Chat, character: CharacterCard, userText: string): 
     });
   }
   memoryEngine.evaluateInteraction(
-    [userMemory.id, ...memories.map((m) => m.record.id)],
+    [...rememberedIds, ...memories.map((m) => m.record.id)],
     signals,
   );
   useChatStore.getState().patchChat(chat.id, { memories: memoryEngine.toProps() });
@@ -217,7 +233,7 @@ export const regenerateLast = async (
   if (!trimmed) return;
   // History passed to runTurn must not double-count the user turn.
   const historyBase = trimmed.messages.filter((m) => m.id !== priorUser.id);
-  await runTurn({ ...trimmed, messages: historyBase }, character, priorUser.content);
+  await runTurn({ ...trimmed, messages: historyBase }, character, priorUser.content, true);
 };
 
 // Continue: ask the character to keep going from where it stopped.
@@ -227,5 +243,10 @@ export const continueChat = async (
 ): Promise<void> => {
   const found = findChatAndCharacter(chatId, characters);
   if (!found) return;
-  await runTurn(found.chat, found.character, '(Continue the scene naturally from where you left off — do not repeat yourself.)');
+  await runTurn(
+    found.chat,
+    found.character,
+    '(Continue the scene naturally from where you left off — do not repeat yourself.)',
+    true,
+  );
 };

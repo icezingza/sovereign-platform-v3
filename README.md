@@ -1,18 +1,18 @@
 # Sovereign Platform v3
 
-**Professional AI Memory & Cognition Engine** built with Domain-Driven Design in TypeScript.
+**Professional AI Memory & Cognition Engine** built with TypeScript + Domain-Driven Design.
 
-A clean, testable, and production-ready foundation for building intelligent agents with persistent long-term memory.
+A clean, testable, production-ready foundation for building intelligent agents with persistent long-term memory.
 
 ## ✨ Features
 
-- Domain-Driven Design (DDD) architecture
-- Rich MemoryRecord aggregate with full lifecycle management
-- Event Sourcing friendly (Snapshot & Reconstitute pattern)
+- Rich `MemoryRecord` aggregate with full lifecycle management
+- Clean Domain-Driven Design architecture
+- Snapshot & Reconstitute pattern (Event Sourcing compatible)
 - Deterministic testing with FakeClock
-- Clean separation between Domain, Application, and Infrastructure layers
 - SQLite persistence adapter included
-- Full TypeScript support with strict type checking
+- Comprehensive test suite with high domain coverage
+- Zero framework dependencies in the domain layer
 
 ## Quick Start
 
@@ -24,34 +24,15 @@ npm run typecheck
 npm test
 ```
 
-## Project Structure
-
-```
-src/
-├── domain/           # Core business logic
-├── application/      # Use cases
-├── infrastructure/   # Database & external adapters
-└── __tests__/        # Comprehensive test suite
-```
-
 ## Core Concepts
 
-- **MemoryRecord** — The heart of the system
-- **MemoryStatus** — Active, Archived, Forgotten, Deleted
+- **MemoryRecord** — Central entity representing knowledge and experiences
+- **MemoryStatus** — Active, Archived, Forgotten, Deleted with strict transition rules
 - **Domain Events** — Track every state change
-- **Repository Pattern** — Clean persistence layer
-
-## Roadmap
-
-- Publish as npm package
-- Create example AI agent projects
-- Add vector search integration
-- Build documentation website
+- **Repository Pattern** — Clean persistence abstraction
 
 ## License
 
 MIT © Icezingza
 
----
-
-Built for Sovereign AI Systems
+Built for Sovereign AI Systems.

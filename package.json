@@ -4,22 +4,57 @@
   "description": "Advanced AI Memory & Cognition System built with Domain-Driven Design (DDD) in TypeScript. Robust foundation for intelligent agents with persistent memory.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/icezingza/sovereign-platform-v3.git"
+    "url": "git+https://github.com/icezingza/sovereign-platform-v3.git"
   },
-  "keywords": ["ai", "memory", "ddd", "typescript", "agent", "cognition", "sovereign-ai"],
+  "homepage": "https://github.com/icezingza/sovereign-platform-v3#readme",
+  "bugs": {
+    "url": "https://github.com/icezingza/sovereign-platform-v3/issues"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "ddd",
+    "domain-driven-design",
+    "typescript",
+    "agent",
+    "ai-agents",
+    "cognition",
+    "event-sourcing",
+    "outbox-pattern",
+    "clean-architecture",
+    "sqlite",
+    "drizzle-orm",
+    "nestjs",
+    "sovereign-ai"
+  ],
   "author": "icezingza",
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:single": "jest --testPathPattern",
     "test:coverage": "jest --coverage",
-    "build": "tsc"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@nestjs/testing": "^10.4.22",

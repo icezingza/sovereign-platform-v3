@@ -210,20 +210,24 @@ export const sendMessage = async (
   chatId: string,
   userText: string,
   characters: CharacterCard[],
+  options: { userAlreadyAppended?: boolean } = {},
 ): Promise<void> => {
   const found = findChatAndCharacter(chatId, characters);
   if (!found || !userText.trim()) return;
 
-  useChatStore.getState().appendMessage(chatId, {
-    id: generateId(),
-    role: 'user',
-    content: userText.trim(),
-    createdAt: Date.now(),
-  });
+  // Image turns append the user message (with imageUrl) themselves; a plain
+  // text turn appends here. Either way runTurn's history must not double-count
+  // the current user turn, so we drop the trailing message from its snapshot.
+  if (!options.userAlreadyAppended) {
+    useChatStore.getState().appendMessage(chatId, {
+      id: generateId(),
+      role: 'user',
+      content: userText.trim(),
+      createdAt: Date.now(),
+    });
+  }
   const chat = useChatStore.getState().chats.find((c) => c.id === chatId);
   if (!chat) return;
-  // Pass the pre-append snapshot semantics: runTurn's history already
-  // includes the user turn explicitly, so trim it from the stored copy.
   await runTurn(
     { ...chat, messages: chat.messages.slice(0, -1) },
     found.character,

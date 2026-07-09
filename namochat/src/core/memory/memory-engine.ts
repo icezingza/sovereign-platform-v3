@@ -66,6 +66,21 @@ export class MemoryEngine {
     }
   }
 
+  // Active memories for a chat, most recent first — for the inspector UI.
+  listFor(chatId: string): MemoryRecord[] {
+    return this.activeFor(chatId)
+      .slice()
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  pin(id: string): void {
+    this.records.find((r) => r.id === id)?.adjustEmotionWeight(0.3);
+  }
+
+  forgetOne(id: string): void {
+    this.records.find((r) => r.id === id)?.forget();
+  }
+
   forgetChat(chatId: string): void {
     for (const record of this.records) {
       if (record.chatId === chatId && record.role !== 'world') record.forget();

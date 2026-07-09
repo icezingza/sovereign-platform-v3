@@ -8,6 +8,7 @@ import type { MemoryRecordProps } from '../core/memory/memory-record';
 import type { TimelineEvent } from '../core/timeline/story-timeline';
 import { generateId } from '../lib/utils';
 import { guardedStorage } from './settings-store';
+import { MemoryEngine } from '../core/memory/memory-engine';
 
 export interface ChatMessage {
   id: string;
@@ -49,6 +50,11 @@ interface ChatState {
   removeMessagesFrom: (chatId: string, messageId: string) => void;
   setStreamingMessageId: (messageId: string | null) => void;
   patchChat: (chatId: string, patch: Partial<Chat>) => void;
+  pinMemory: (chatId: string, memoryId: string) => void;
+  forgetMemory: (chatId: string, memoryId: string) => void;
+  addWorldMemory: (chatId: string, content: string) => void;
+  addTimelineEvent: (chatId: string, event: TimelineEvent) => void;
+  forkChat: (chatId: string, messageId: string) => Chat | null;
   exportChats: () => string;
   importChats: (json: unknown) => number;
 }
@@ -126,6 +132,78 @@ export const useChatStore = create<ChatState>()(
             chat.id === chatId ? touch({ ...chat, ...patch }) : chat,
           ),
         })),
+
+      pinMemory: (chatId, memoryId) =>
+        set((state) => ({
+          chats: state.chats.map((chat) => {
+            if (chat.id !== chatId) return chat;
+            const engine = new MemoryEngine(chat.memories);
+            engine.pin(memoryId);
+            return touch({ ...chat, memories: engine.toProps() });
+          }),
+        })),
+
+      forgetMemory: (chatId, memoryId) =>
+        set((state) => ({
+          chats: state.chats.map((chat) => {
+            if (chat.id !== chatId) return chat;
+            const engine = new MemoryEngine(chat.memories);
+            engine.forgetOne(memoryId);
+            return touch({ ...chat, memories: engine.toProps() });
+          }),
+        })),
+
+      addWorldMemory: (chatId, content) =>
+        set((state) => ({
+          chats: state.chats.map((chat) => {
+            if (chat.id !== chatId || !content.trim()) return chat;
+            const engine = new MemoryEngine(chat.memories);
+            // World memories are pinned high so they survive weighting.
+            engine.remember({
+              id: generateId(),
+              chatId: chat.id,
+              role: 'world',
+              content: content.trim(),
+              emotionWeight: 0.9,
+              timestamp: Date.now(),
+            });
+            return touch({ ...chat, memories: engine.toProps() });
+          }),
+        })),
+
+      addTimelineEvent: (chatId, event) =>
+        set((state) => ({
+          chats: state.chats.map((chat) =>
+            chat.id === chatId ? touch({ ...chat, timeline: [...chat.timeline, event] }) : chat,
+          ),
+        })),
+
+      // Fork: a new chat carrying history up to and including messageId, plus
+      // the affect/relationship/memory/timeline snapshot — for branching.
+      forkChat: (chatId, messageId) => {
+        const source = get().chats.find((c) => c.id === chatId);
+        if (!source) return null;
+        const cutoff = source.messages.findIndex((m) => m.id === messageId);
+        if (cutoff < 0) return null;
+        const forkId = generateId();
+        const fork: Chat = {
+          ...source,
+          id: forkId,
+          title: `${source.title} (branch)`,
+          messages: source.messages.slice(0, cutoff + 1).map((m) => ({ ...m })),
+          // Remap chatId so per-chat recall works in the branch; world memories
+          // stay role='world' and remain shared.
+          memories: source.memories.map((m) => ({
+            ...m,
+            chatId: m.role === 'world' ? m.chatId : forkId,
+          })),
+          timeline: source.timeline.map((event) => ({ ...event, chatId: forkId })),
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        set((state) => ({ chats: [fork, ...state.chats], activeChatId: fork.id }));
+        return fork;
+      },
 
       exportChats: () => {
         const payload: ChatExport = { version: 1, app: 'namochat', chats: get().chats };

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Pencil, RefreshCw, X } from 'lucide-react';
+import { Check, GitBranch, Pencil, RefreshCw, X } from 'lucide-react';
 import { cn, formatTime } from '../../lib/utils';
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/input';
@@ -13,6 +13,7 @@ interface MessageBubbleProps {
   isLastAssistant: boolean;
   onEdit: (content: string) => void;
   onRegenerate: () => void;
+  onFork: () => void;
 }
 
 export const MessageBubble = ({
@@ -21,6 +22,7 @@ export const MessageBubble = ({
   isLastAssistant,
   onEdit,
   onRegenerate,
+  onFork,
 }: MessageBubbleProps) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -101,6 +103,13 @@ export const MessageBubble = ({
                   <RefreshCw size={11} />
                 </button>
               )}
+              <button
+                className="p-1 text-zinc-500 hover:text-zinc-200"
+                title="Branch from here"
+                onClick={onFork}
+              >
+                <GitBranch size={11} />
+              </button>
             </span>
           )}
         </div>

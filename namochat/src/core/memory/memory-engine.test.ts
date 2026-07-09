@@ -47,6 +47,23 @@ describe('MemoryEngine', () => {
     expect(engine.toProps()).toHaveLength(0);
   });
 
+  it('pin raises weight and forgetOne drops the record from serialization', () => {
+    const engine = new MemoryEngine();
+    engine.remember(record('m1', 'a fond memory', 'chat1', 0.4));
+    engine.pin('m1');
+    expect(engine.toProps().find((p) => p.id === 'm1')?.emotionWeight).toBeCloseTo(0.7);
+
+    engine.forgetOne('m1');
+    expect(engine.toProps()).toHaveLength(0);
+  });
+
+  it('listFor returns active records newest-first', () => {
+    const engine = new MemoryEngine();
+    engine.remember(record('m1', 'first', 'chat1'));
+    engine.remember(record('m9', 'ninth', 'chat1'));
+    expect(engine.listFor('chat1').map((r) => r.id)).toEqual(['m9', 'm1']);
+  });
+
   it('cosine similarity is safe on empty/mismatched vectors', () => {
     expect(calculateCosineSimilarity([], [1])).toBe(0);
     expect(calculateCosineSimilarity([1, 0], [1, 0])).toBe(1);

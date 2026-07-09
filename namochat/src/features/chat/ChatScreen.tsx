@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, FastForward, Heart, Send, Square } from 'lucide-react';
+import { ArrowLeft, FastForward, Heart, Image as ImageIcon, PanelRight, Send, Square, X } from 'lucide-react';
 import { useChatStore } from '../../stores/chat-store';
 import { useCharacterStore } from '../../stores/character-store';
 import { useUiStore } from '../../stores/ui-store';
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/input';
 import { MessageBubble } from './MessageBubble';
+import { ChatSidePanel } from './ChatSidePanel';
 import { sendMessage, regenerateLast, continueChat, stopStreaming } from '../../stores/chat-pipeline';
 import { RelationshipEngine, DEFAULT_STAGES } from '../../core/relationship/relationship-engine';
+import { generateId } from '../../lib/utils';
 
 export const ChatScreen = ({ chatId }: { chatId: string }) => {
   const chat = useChatStore((s) => s.chats.find((c) => c.id === chatId));
@@ -15,8 +17,13 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
   const updateMessageContent = useChatStore((s) => s.updateMessageContent);
   const characters = useCharacterStore((s) => s.characters);
   const navigate = useUiStore((s) => s.navigate);
+  const appendMessage = useChatStore((s) => s.appendMessage);
+  const forkChat = useChatStore((s) => s.forkChat);
   const [input, setInput] = useState('');
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const scrollAnchor = useRef<HTMLDivElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
 
   const character = characters.find((c) => c.id === chat?.characterId);
   const isStreaming = streamingMessageId !== null;
@@ -35,10 +42,32 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
   const lastAssistantId = [...chat.messages].reverse().find((m) => m.role === 'assistant')?.id;
 
   const submit = () => {
-    if (!input.trim() || isStreaming || !character) return;
-    const text = input;
+    if (isStreaming || !character) return;
+    const text = input.trim();
+    // An image-only turn is allowed; a text turn drives the model.
+    if (!text && !pendingImage) return;
+    if (pendingImage) {
+      appendMessage(chat.id, {
+        id: generateId(),
+        role: 'user',
+        content: text,
+        imageUrl: pendingImage,
+        createdAt: Date.now(),
+      });
+      setPendingImage(null);
+      setInput('');
+      // The model still receives the text (image is a local visual for now).
+      if (text) void sendMessage(chat.id, text, characters, { userAlreadyAppended: true });
+      return;
+    }
     setInput('');
     void sendMessage(chat.id, text, characters);
+  };
+
+  const attachImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => setPendingImage(String(reader.result));
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -77,6 +106,9 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
             </div>
           ))}
         </div>
+        <Button variant="ghost" size="icon" title="Memory & timeline" onClick={() => setPanelOpen(true)}>
+          <PanelRight size={18} />
+        </Button>
       </header>
 
       {/* Messages */}
@@ -89,6 +121,10 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
             isLastAssistant={message.id === lastAssistantId}
             onEdit={(content) => updateMessageContent(chat.id, message.id, content)}
             onRegenerate={() => void regenerateLast(chat.id, characters)}
+            onFork={() => {
+              const fork = forkChat(chat.id, message.id);
+              if (fork) navigate({ name: 'chat', chatId: fork.id });
+            }}
           />
         ))}
         <div ref={scrollAnchor} />
@@ -96,7 +132,38 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
 
       {/* Composer */}
       <div className="border-t border-surface-800 bg-surface-950/80 p-3 backdrop-blur">
+        {pendingImage && (
+          <div className="relative mb-2 inline-block">
+            <img src={pendingImage} alt="" className="max-h-24 rounded-lg" />
+            <button
+              className="absolute -right-2 -top-2 rounded-full bg-surface-700 p-1 text-zinc-300"
+              onClick={() => setPendingImage(null)}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+        <input
+          ref={imageInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) attachImage(file);
+            e.target.value = '';
+          }}
+        />
         <div className="flex items-end gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            title="Attach image"
+            disabled={isStreaming}
+            onClick={() => imageInput.current?.click()}
+          >
+            <ImageIcon size={16} />
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -124,12 +191,19 @@ export const ChatScreen = ({ chatId }: { chatId: string }) => {
               <Square size={15} />
             </Button>
           ) : (
-            <Button size="icon" title="Send" disabled={!input.trim()} onClick={submit}>
+            <Button
+              size="icon"
+              title="Send"
+              disabled={!input.trim() && !pendingImage}
+              onClick={submit}
+            >
               <Send size={16} />
             </Button>
           )}
         </div>
       </div>
+
+      {panelOpen && <ChatSidePanel chatId={chat.id} onClose={() => setPanelOpen(false)} />}
     </div>
   );
 };

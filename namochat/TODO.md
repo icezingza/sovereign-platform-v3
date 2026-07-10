@@ -42,6 +42,16 @@ Never sacrifice character consistency; never break memory.
 - [x] **PWA**/offline packaging (manifest + service worker)
 - [ ] Backup encryption (deferred — optional, low roleplay value)
 
+## Phase 4B — Lore Runtime
+
+- [x] **Sprint 1 — Lore Runtime Foundation** (`src/core/lore/` at repo root): LoreEntry schema,
+      lexical matcher, deterministic ranker, retrieval pipeline, runtime guards. 33 tests.
+- [x] **Sprint 2 — Janitor / SillyTavern Import Adapter** (`src/core/lore/import/`): auto format
+      detection (Janitor / CharacterBookV2 / WorldInfo), field mapping with metadata.raw
+      preservation, executable-field validation, prompt-injection scanner (Unicode-normalized),
+      quarantine + ImportReport. 56 tests. See `docs/lore/IMPORT_ADAPTER_REPORT.md`.
+- [ ] Sprint 3 — wire lore retrieval + import into Context Allocator / Prompt Composer (not started)
+
 ## Continuous
 - [x] Maintain TODO.md + namochat/CLAUDE.md
 - [x] Commit per milestone; refactor over rebuild

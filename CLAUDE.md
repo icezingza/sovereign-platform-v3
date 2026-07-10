@@ -122,6 +122,7 @@ MemoryRecord.toSnapshot()  ──►  MemorySnapshot  ──►  (repository ada
 | **Phase 4A Sprint 2** ✅ | Soul Core consolidation: `derivePersonaState(DerivePersonaStateInput)` object-param API; `renderPersonaBlock()` as single persona-assembly routine; `PersonaState` readonly fields + Object.freeze(); first-class `narrationTone`/`dimensionNotes`/`overlay` fields (84 tests) |
 | **Phase 4A Sprint 3** ✅ | Context Allocation Engine: centralized allocator replacing append-style composition; tier-based budget (mandatory/protected/optional); Memory Floor + Lore Cap + Shared Optional Budget; `PromptSnapshot` for debug (98 tests) |
 | **Phase 4B Sprint 1** ✅ | Lore Runtime Foundation: generic lore retrieval engine (pure domain); LoreEntry schema + LoreMatch; lexical matching (primary/secondary keys, whole-word, case-insensitive, deterministic); constant/priority/insertionOrder/probability ranking; runtime guards (reject activationScript, extensions, unknown executable fields) (242 tests total) |
+| **Phase 4B Sprint 2** ✅ | Janitor / SillyTavern Import Adapter: `src/core/lore/import/` — auto format detection (Janitor / CharacterBookV2 / WorldInfo / Unknown), field mapping onto LoreEntry with metadata.raw preservation, executable-field validation + prompt-injection scanner (Unicode-normalized), quarantine with severity, ImportReport with statistics; pure conversion layer, no retrieval/composition wiring (298 tests total) |
 
 ### Sprint 2.5 — Repository Layer (done)
 
@@ -402,4 +403,41 @@ src/
 - Runtime guards: reject activationScript, extensions, executable-looking unknowns; allow metadata
 - End-to-end scenarios: complex filtering with mixed conditions, empty results, array immutability
 
-**Not implemented**: Janitor JSON import, Scenario Packs, semantic search, UI integration. Phase 4B Sprint 2+ will wire lore into the context allocator and Prompt Composer.
+**Not implemented in Sprint 1**: Janitor JSON import (closed out in Sprint 2 below), Scenario Packs, semantic search, UI integration.
+
+### Phase 4B Sprint 2 — Janitor / SillyTavern Import Adapter (done)
+
+```
+src/
+├── core/lore/import/
+│   ├── lore-import.ts                # importLorebook(): parse → detect → validate → convert → report
+│   ├── format-detector.ts            # detectFormat(): Janitor | CharacterBookV2 | WorldInfo | Unknown
+│   ├── import-validator.ts           # executable-field validation + prompt-injection scanner
+│   ├── import-common.ts              # shared coercion helpers + buildLoreEntry (metadata.raw preservation)
+│   ├── janitor-import.ts             # Janitor lorebook → LoreEntry
+│   ├── characterbook-import.ts       # Character Book v2 (standalone or chara_card_v2-wrapped) → LoreEntry
+│   ├── worldinfo-import.ts           # SillyTavern World Info (object map or array) → LoreEntry
+│   └── import-report.ts              # ImportReport / QuarantinedEntry / ImportStatistics types
+└── __tests__/core/lore/
+    └── lore-import.spec.ts           # 56 regression tests
+```
+
+**Pure conversion layer only** — the importer turns external lorebook formats into internal `LoreEntry[]`; it does NOT touch the Prompt Builder, Context Allocator, retrieval runtime, or any storage.
+
+**Format detection heuristics** (`detectFormat`): `spec: 'chara_card_v2'` wrapper or entries carrying `extensions`/`case_sensitive`/`selective` → CharacterBookV2; `entries` as an object map, or entries with singular `key`/`keysecondary`/`disable`/`uid` → WorldInfo; a flat `entries` array of `{ keys, content }` → Janitor; anything else → Unknown. `insertion_order` is deliberately NOT a CharacterBookV2 marker (Janitor exports carry it too).
+
+**Field mapping**: `keys`, `secondary_keys`→`secondaryKeys`, `content`, `priority`, `constant`, `enabled` (WorldInfo `disable` inverted), `probability` (percent values >1 normalized to 0..1; WorldInfo `useProbability: false` → 1), `position`/`insertion_order`/`order`→`insertionOrder`, `comment`/`name`/`tags`/`position`→`metadata`. Unknown source fields are preserved verbatim under `metadata.raw`. Missing fields get defaults (compatibility layer) — incomplete exports never throw; entries with empty content are skipped with a warning; duplicate ids are suffixed deterministically.
+
+**Validation** (`findExecutableFields`, recursive): field names `activationScript`/`script`/`javascript`/`eval`/`function`/`onLoad`/`onMessage`/`onOpen` (case-insensitive) → quarantine at `critical` severity. `extensions`: an empty `{}` (required by the v2 spec on every entry) is stripped silently; a non-empty payload → quarantine at `high` severity.
+
+**Injection scanner** (`scanEntryForInjection`): scans `content`/`name`/`comment` and all key arrays for BEGIN OVERRIDE / IGNORE PREVIOUS / SYSTEM PROMPT / OVERRIDE ALL / STOP ALL CURRENT / ROLEPLAY OVERRIDE / DEVELOPER MESSAGE / ASSISTANT MESSAGE / PROMPT INJECTION. Text is normalized before matching (`normalizeForScan`: NFKC fold, strip zero-width chars + soft hyphen, collapse whitespace, uppercase) so fullwidth/zero-width Unicode bypasses are caught.
+
+**Quarantine**: unsafe entries are never imported; each lands in `ImportReport.quarantined[]` as `{ entryId, reason, severity, matchedPattern }`. Healthy entries in the same document still import.
+
+**ImportReport**: `formatDetected`, `entriesImported`, `entriesSkipped`, `entriesQuarantined`, `warnings`, `quarantined[]`, `statistics` (totalEntriesFound, constantEntries, disabledEntries, entriesWithSecondaryKeys, averageKeysPerEntry). `importLorebook` never throws — broken JSON and unknown formats return an empty result with warnings.
+
+**Tests** (56 cases, 298 total): format detection (all four outcomes, card-wrapped books, array-shaped World Info, mixed markers), per-format field mapping, percent-probability normalization, metadata.raw preservation, defaults/coercion for missing or wrong-typed fields, empty-content skip, duplicate-id dedup, all eight executable field names + nested fields + non-empty extensions, all nine injection phrases + keys/name/comment surfaces + case/zero-width/fullwidth/whitespace bypasses + benign-text non-flagging, report statistics, deterministic conversion, 2000-entry large file, input immutability.
+
+**Not implemented (deferred to Sprint 3+)**: wiring imported entries into the Context Allocator / Prompt Composer, Scenario Packs, semantic search, UI.
+
+See `docs/lore/IMPORT_ADAPTER_REPORT.md` for the full adapter report.
